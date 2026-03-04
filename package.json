@@ -1,0 +1,39 @@
+{
+  "name": "speed-fit",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "start": "node server.ts",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "tsc --noEmit",
+    "migrate": "tsx migrate.ts"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "firebase-admin": "^13.7.0",
+    "lowdb": "^7.0.1",
+    "lucide-react": "^0.576.0",
+    "motion": "^12.34.4",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.7.0",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "steno": "^4.0.2",
+    "tsx": "^4.21.0",
+    "vite-plugin-pwa": "^1.2.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
