@@ -143,3 +143,11 @@ export interface Message {
   timestamp: string;
   read: boolean;
 }
+
+export interface ProgressPhoto {
+  id: string;
+  clientId: string;
+  date: string;
+  imageUrl: string;
+  notes?: string;
+}

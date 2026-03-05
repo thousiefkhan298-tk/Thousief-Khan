@@ -60,7 +60,7 @@ const DB_FILE = path.join(process.cwd(), 'db.json');
 
 // Fallback local DB logic
 function loadLocalDb() {
-  const emptyDb = { users: [], clientDetails: [], healthAssessments: [], fitnessAssessments: [], workouts: [], diets: [], attendance: [], payments: [], notifications: [], workoutLogs: [], sessionRequests: [], trainerNotes: [], messages: [] };
+  const emptyDb = { users: [], clientDetails: [], healthAssessments: [], fitnessAssessments: [], workouts: [], diets: [], attendance: [], payments: [], notifications: [], workoutLogs: [], sessionRequests: [], trainerNotes: [], messages: [], progressPhotos: [] };
   if (!fs.existsSync(DB_FILE)) return emptyDb;
   try {
     const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
@@ -755,6 +755,45 @@ app.get('/api/download-source', (req, res) => {
       }
     });
   });
+});
+
+app.post('/api/progress-photos', async (req, res) => {
+  try {
+    const photo = { ...req.body, id: Date.now().toString(), date: new Date().toISOString() };
+    const { firestore, local, isLocal } = getDatabase();
+
+    if (isLocal) {
+      if (!local.progressPhotos) local.progressPhotos = [];
+      local.progressPhotos.push(photo);
+      saveLocalDb(local);
+      io.emit('client_updated', photo.clientId);
+      return res.json(photo);
+    }
+
+    await firestore!.collection('progressPhotos').add(photo);
+    io.emit('client_updated', photo.clientId);
+    res.json(photo);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to save progress photo' });
+  }
+});
+
+app.get('/api/progress-photos/:clientId', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { firestore, local, isLocal } = getDatabase();
+
+    if (isLocal) {
+      const photos = (local.progressPhotos || []).filter((p: any) => p.clientId === clientId);
+      return res.json(photos);
+    }
+
+    const snapshot = await firestore!.collection('progressPhotos').where('clientId', '==', clientId).get();
+    const photos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(photos);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch progress photos' });
+  }
 });
 
 async function startServer() {

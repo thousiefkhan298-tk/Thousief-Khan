@@ -76,7 +76,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onToggleView }) =
           </h1>
           <div className="flex items-center justify-center gap-4 mt-2">
             <div className="h-[1px] w-8 bg-lime-500/50"></div>
-            <p className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.4em]">Elite Performance</p>
+            <p className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.4em]">Build to Transform</p>
             <div className="h-[1px] w-8 bg-lime-500/50"></div>
           </div>
         </div>

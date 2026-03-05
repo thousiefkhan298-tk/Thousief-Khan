@@ -640,8 +640,52 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
             </div>
           </div>
         );
-      case 'messages':
-        return <ClientMessages user={user} />;
+      case 'messages': return <ClientMessages user={user} />;
+      case 'photos':
+        return (
+          <div className="space-y-8">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-xl">
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                <i className="fas fa-camera text-lime-500"></i>
+                Progress Photos
+              </h3>
+              
+              <div className="mb-8 p-6 bg-neutral-800/50 rounded-2xl border border-neutral-700">
+                <label className="block text-[10px] font-black text-neutral-500 uppercase mb-4">Upload New Photo</label>
+                <div className="flex gap-4">
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = async () => {
+                          const base64String = reader.result as string;
+                          await store.saveProgressPhoto({ clientId: user.id, imageUrl: base64String });
+                          fetchData();
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="block w-full text-sm text-neutral-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-lime-500 file:text-black hover:file:bg-lime-400"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {(data.progressPhotos || []).map((photo: any) => (
+                  <div key={photo.id} className="bg-neutral-800 rounded-2xl overflow-hidden border border-neutral-700">
+                    <img src={photo.imageUrl} alt="Progress" className="w-full h-48 object-cover" />
+                    <div className="p-4">
+                      <p className="text-[10px] text-neutral-500 font-bold uppercase">{new Date(photo.date).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
       default: return null;
     }
   };

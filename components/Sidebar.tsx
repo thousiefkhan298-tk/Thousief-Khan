@@ -28,6 +28,7 @@ const Sidebar: React.FC<SidebarProps> = ({ role, activeTab, setActiveTab, onLogo
     { id: 'workout', icon: 'fa-dumbbell', label: 'My Workout' },
     { id: 'diet', icon: 'fa-apple-whole', label: 'My Diet' },
     { id: 'attendance', icon: 'fa-calendar-check', label: 'My Progress' },
+    { id: 'photos', icon: 'fa-camera', label: 'Progress Photos' },
     { id: 'messages', icon: 'fa-comments', label: 'Messages' },
     { id: 'notifications', icon: 'fa-bell', label: 'Notifications' },
   ];

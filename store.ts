@@ -105,6 +105,12 @@ export const store = {
   },
   getMessages: async (userId: string, otherUserId: string) => {
     return api.get(`/messages/${userId}/${otherUserId}`);
+  },
+  saveProgressPhoto: async (photo: any) => {
+    return api.post('/progress-photos', photo);
+  },
+  getProgressPhotos: async (clientId: string) => {
+    return api.get(`/progress-photos/${clientId}`);
   }
 };
 
