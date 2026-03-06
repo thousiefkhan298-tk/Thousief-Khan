@@ -107,7 +107,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white selection:bg-lime-500 selection:text-black relative">
+    <div className="min-h-screen bg-white text-neutral-900 selection:bg-red-600 selection:text-white relative">
       <BackgroundSlideshow />
       <div className="relative z-10">
         {renderContent()}

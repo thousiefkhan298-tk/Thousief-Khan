@@ -80,7 +80,7 @@ const TrainerDashboard: React.FC<TrainerDashboardProps> = ({ onLogout }) => {
   };
 
   return (
-    <div className="flex h-screen bg-neutral-950 overflow-hidden">
+    <div className="flex h-screen bg-neutral-50 overflow-hidden">
       <Sidebar role={UserRole.TRAINER} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={onLogout} />
       
       <main className="flex-1 lg:ml-64 overflow-y-auto p-6 lg:p-10">
@@ -88,14 +88,14 @@ const TrainerDashboard: React.FC<TrainerDashboardProps> = ({ onLogout }) => {
           <div className="flex items-center gap-4">
             <Logo size={48} />
             <div>
-              <h2 className="text-3xl font-black text-white italic tracking-tighter brand-font">TRAINER <span className="text-lime-500">CONSOLE</span></h2>
+              <h2 className="text-3xl font-black text-black italic tracking-tighter brand-font uppercase">TRAINER <span className="text-red-600">CONSOLE</span></h2>
               <p className="text-neutral-500 text-sm mt-1">Manage your clients and their transformation journeys.</p>
             </div>
           </div>
           <div className="flex items-center space-x-4">
-             <div className={`bg-neutral-900 border border-neutral-800 rounded-full px-4 py-2 flex items-center space-x-2 text-[10px] uppercase font-black tracking-widest ${isCloudConnected ? 'text-lime-500' : 'text-orange-500'}`}>
-                <div className={`w-2 h-2 rounded-full ${isCloudConnected ? 'bg-lime-500' : 'bg-orange-500'} animate-pulse`}></div>
-                <span className="text-neutral-400">{isCloudConnected ? 'Cloud Sync Active' : 'Local Mode'}</span>
+             <div className={`bg-white border border-black/5 rounded-full px-4 py-2 flex items-center space-x-2 text-[10px] uppercase font-black tracking-widest ${isCloudConnected ? 'text-red-600' : 'text-orange-500'} shadow-sm`}>
+                <div className={`w-2 h-2 rounded-full ${isCloudConnected ? 'bg-red-600' : 'bg-orange-500'} animate-pulse`}></div>
+                <span className="text-neutral-500">{isCloudConnected ? 'Cloud Sync Active' : 'Local Mode'}</span>
              </div>
           </div>
         </header>

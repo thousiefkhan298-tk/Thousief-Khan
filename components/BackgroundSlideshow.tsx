@@ -21,7 +21,7 @@ const BackgroundSlideshow: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-      <div className="absolute inset-0 bg-neutral-950/90 z-10" /> {/* Heavy overlay for readability */}
+      <div className="absolute inset-0 bg-white/90 z-10" /> {/* Light overlay for Red/White theme */}
       <AnimatePresence mode='wait'>
         <motion.img
           key={index}

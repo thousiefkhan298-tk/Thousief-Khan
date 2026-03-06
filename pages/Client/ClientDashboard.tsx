@@ -23,6 +23,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
   const [logEntries, setLogEntries] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [rescheduleSuccess, setRescheduleSuccess] = useState('');
   const [currentEntry, setCurrentEntry] = useState({
     exercise: '',
     sets: '',
@@ -47,6 +48,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
   const handleSubmitReschedule = async () => {
     if (!selectedMissedSession || !requestedDate) return;
     setConfirmRescheduleModalOpen(false);
+    setSubmitting(true);
     try {
       await store.createSessionRequest({
         clientId: user.id,
@@ -56,9 +58,12 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
       });
       setRescheduleModalOpen(false);
       fetchData();
-      alert('Reschedule request sent!');
+      setRescheduleSuccess('Reschedule request sent to trainer!');
+      setTimeout(() => setRescheduleSuccess(''), 5000);
     } catch (error) {
       alert('Failed to send request');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -137,8 +142,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
 
   if (loading || !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-950">
-        <div className="text-lime-500 animate-pulse font-bold tracking-widest uppercase">Loading Profile...</div>
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="text-red-600 animate-pulse font-bold tracking-widest uppercase">Loading Profile...</div>
       </div>
     );
   }
@@ -186,31 +191,31 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
           <div className="space-y-8">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-6">
-                <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-xl">
+                <div className="bg-white border border-black/5 rounded-3xl p-8 shadow-xl">
                   <div className="flex justify-between items-center mb-6">
                     <h3 className="text-2xl font-bold flex items-center gap-3">
-                      <i className="fas fa-dumbbell text-lime-500"></i>
+                      <i className="fas fa-dumbbell text-red-600"></i>
                       Training Plan
                     </h3>
-                    <span className="text-[10px] font-black uppercase text-neutral-500 bg-neutral-800 px-3 py-1 rounded-full border border-neutral-700">
+                    <span className="text-[10px] font-black uppercase text-neutral-500 bg-neutral-50 px-3 py-1 rounded-full border border-black/10">
                       Updated {data.workout ? new Date(data.workout.updatedAt).toLocaleDateString() : 'N/A'}
                     </span>
                   </div>
                   {data.workout ? (
-                    <div className="whitespace-pre-wrap font-mono text-neutral-300 leading-relaxed bg-neutral-950 p-8 rounded-2xl border border-neutral-800 text-sm">
+                    <div className="whitespace-pre-wrap font-mono text-neutral-700 leading-relaxed bg-neutral-50 p-8 rounded-2xl border border-black/10 text-sm">
                       {data.workout.plan}
                     </div>
                   ) : (
-                    <div className="text-center py-20 text-neutral-500 border border-dashed border-neutral-800 rounded-2xl">
-                       <p className="font-bold uppercase tracking-widest text-sm mb-2">No Workout Assigned Yet</p>
+                    <div className="text-center py-20 text-neutral-500 border border-dashed border-black/10 rounded-2xl">
+                       <p className="font-bold uppercase tracking-widest text-sm mb-2 text-black">No Workout Assigned Yet</p>
                        <p className="text-xs">Your trainer is currently preparing your routine.</p>
                     </div>
                   )}
                 </div>
 
-                <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-xl">
+                <div className="bg-white border border-black/5 rounded-3xl p-8 shadow-xl">
                   <h3 className="text-2xl font-bold flex items-center gap-3 mb-6">
-                    <i className="fas fa-edit text-lime-500"></i>
+                    <i className="fas fa-edit text-red-600"></i>
                     Log Completed Workout
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -220,7 +225,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                         type="text" 
                         value={currentEntry.exercise}
                         onChange={e => setCurrentEntry({...currentEntry, exercise: e.target.value})}
-                        className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-2 text-sm focus:border-lime-500 outline-none"
+                        className="w-full bg-neutral-50 border border-black/10 rounded-xl px-4 py-2 text-sm focus:border-red-600 outline-none text-black"
                         placeholder="e.g. Bench Press"
                       />
                     </div>
@@ -230,7 +235,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                         type="text" 
                         value={currentEntry.sets}
                         onChange={e => setCurrentEntry({...currentEntry, sets: e.target.value})}
-                        className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-2 text-sm focus:border-lime-500 outline-none"
+                        className="w-full bg-neutral-50 border border-black/10 rounded-xl px-4 py-2 text-sm focus:border-red-600 outline-none text-black"
                         placeholder="e.g. 4"
                       />
                     </div>
@@ -240,7 +245,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                         type="text" 
                         value={currentEntry.reps}
                         onChange={e => setCurrentEntry({...currentEntry, reps: e.target.value})}
-                        className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-2 text-sm focus:border-lime-500 outline-none"
+                        className="w-full bg-neutral-50 border border-black/10 rounded-xl px-4 py-2 text-sm focus:border-red-600 outline-none text-black"
                         placeholder="e.g. 10"
                       />
                     </div>
@@ -251,12 +256,12 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                           type="text" 
                           value={currentEntry.weight}
                           onChange={e => setCurrentEntry({...currentEntry, weight: e.target.value})}
-                          className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-2 text-sm focus:border-lime-500 outline-none"
+                          className="w-full bg-neutral-50 border border-black/10 rounded-xl px-4 py-2 text-sm focus:border-red-600 outline-none text-black"
                           placeholder="e.g. 60"
                         />
                         <button 
                           onClick={addEntry}
-                          className="bg-lime-500 text-black p-2 rounded-xl hover:bg-lime-400 transition-colors"
+                          className="bg-red-600 text-white p-2 rounded-xl hover:bg-red-500 transition-colors"
                         >
                           <i className="fas fa-plus"></i>
                         </button>
@@ -267,12 +272,12 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                   {logEntries.length > 0 && (
                     <div className="space-y-3 mb-6">
                       {logEntries.map((entry, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-4 bg-neutral-800/50 rounded-2xl border border-neutral-700/50">
+                        <div key={idx} className="flex items-center justify-between p-4 bg-neutral-50 rounded-2xl border border-black/10">
                           <div className="flex gap-4 items-center">
-                            <span className="text-sm font-bold text-white">{entry.exercise}</span>
+                            <span className="text-sm font-bold text-black">{entry.exercise}</span>
                             <span className="text-xs text-neutral-500">{entry.sets} sets x {entry.reps} reps {entry.weight ? `@ ${entry.weight}kg` : ''}</span>
                           </div>
-                          <button onClick={() => removeEntry(idx)} className="text-red-500 hover:text-red-400">
+                          <button onClick={() => removeEntry(idx)} className="text-red-600 hover:text-red-500">
                             <i className="fas fa-trash"></i>
                           </button>
                         </div>
@@ -285,7 +290,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                     <textarea
                       value={workoutNote}
                       onChange={(e) => setWorkoutNote(e.target.value)}
-                      className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 text-sm focus:border-lime-500 outline-none text-white h-20 resize-none"
+                      className="w-full bg-neutral-50 border border-black/10 rounded-xl px-4 py-3 text-sm focus:border-red-600 outline-none text-black h-20 resize-none"
                       placeholder="How did it feel? Any PRs?"
                     />
                   </div>
@@ -293,11 +298,11 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                   <button 
                     onClick={() => setConfirmWorkoutModalOpen(true)}
                     disabled={logEntries.length === 0 || submitting}
-                    className="w-full py-4 bg-lime-500 text-black font-black uppercase tracking-widest rounded-2xl hover:bg-lime-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full py-4 bg-red-600 text-white font-black uppercase tracking-widest rounded-2xl hover:bg-red-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {submitting ? (
                       <>
-                        <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                         <span>Logging...</span>
                       </>
                     ) : (
@@ -305,8 +310,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                     )}
                   </button>
                   {successMessage && (
-                    <div className="mt-4 p-3 bg-lime-500/10 border border-lime-500/20 rounded-xl text-center">
-                      <p className="text-lime-500 font-bold text-sm flex items-center justify-center gap-2">
+                    <div className="mt-4 p-3 bg-red-600/10 border border-red-600/20 rounded-xl text-center">
+                      <p className="text-red-600 font-bold text-sm flex items-center justify-center gap-2">
                         <i className="fas fa-check-circle"></i>
                         {successMessage}
                       </p>
@@ -314,43 +319,43 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                   )}
                 </div>
 
-                <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-xl">
+                <div className="bg-white border border-black/5 rounded-3xl p-8 shadow-xl">
                   <div className="flex justify-between items-center mb-8">
-                    <h3 className="text-2xl font-bold flex items-center gap-3">
-                      <i className="fas fa-history text-lime-500"></i>
+                    <h3 className="text-2xl font-bold flex items-center gap-3 text-black">
+                      <i className="fas fa-history text-red-600"></i>
                       Workout History
                     </h3>
-                    <span className="text-[10px] font-black uppercase text-neutral-500 bg-neutral-800 px-3 py-1 rounded-full border border-neutral-700">
+                    <span className="text-[10px] font-black uppercase text-neutral-500 bg-neutral-50 px-3 py-1 rounded-full border border-black/10">
                       {data.workoutLogs?.length || 0} Sessions Logged
                     </span>
                   </div>
                   {data.workoutLogs && data.workoutLogs.length > 0 ? (
                     <div className="space-y-8">
                       {data.workoutLogs.slice().reverse().map((log: any) => (
-                        <div key={log.id} className="relative pl-8 border-l border-neutral-800 group">
-                          <div className="absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full bg-neutral-800 border border-neutral-700 group-hover:bg-lime-500 group-hover:border-lime-400 transition-colors"></div>
+                        <div key={log.id} className="relative pl-8 border-l border-black/10 group">
+                          <div className="absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full bg-white border border-black/20 group-hover:bg-red-600 group-hover:border-red-500 transition-colors"></div>
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-                            <p className="text-xs font-black text-lime-500 uppercase tracking-widest flex items-center gap-2">
+                            <p className="text-xs font-black text-red-600 uppercase tracking-widest flex items-center gap-2">
                               <i className="far fa-calendar-alt opacity-50"></i>
                               {new Date(log.date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
                             </p>
-                            <p className="text-[10px] font-bold text-neutral-500 uppercase bg-neutral-950 px-3 py-1 rounded-full border border-neutral-800">
+                            <p className="text-[10px] font-bold text-neutral-500 uppercase bg-neutral-50 px-3 py-1 rounded-full border border-black/10">
                               <i className="far fa-clock mr-1.5 opacity-50"></i>
                               {new Date(log.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </p>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {log.entries.map((entry: any, i: number) => (
-                              <div key={i} className="bg-neutral-950/50 p-4 rounded-2xl border border-neutral-800 hover:border-neutral-700 transition-colors">
-                                <p className="text-sm font-bold text-white mb-1 truncate">{entry.exercise}</p>
+                              <div key={i} className="bg-neutral-50 p-4 rounded-2xl border border-black/5 hover:border-black/10 transition-colors">
+                                <p className="text-sm font-bold text-black mb-1 truncate">{entry.exercise}</p>
                                 <div className="flex items-center gap-2">
                                   <span className="text-[10px] font-black text-neutral-500 uppercase">{entry.sets} Sets</span>
-                                  <span className="w-1 h-1 rounded-full bg-neutral-800"></span>
+                                  <span className="w-1 h-1 rounded-full bg-neutral-200"></span>
                                   <span className="text-[10px] font-black text-neutral-500 uppercase">{entry.reps} Reps</span>
                                   {entry.weight && (
                                     <>
-                                      <span className="w-1 h-1 rounded-full bg-neutral-800"></span>
-                                      <span className="text-[10px] font-black text-lime-500/80 uppercase">{entry.weight} kg</span>
+                                      <span className="w-1 h-1 rounded-full bg-neutral-200"></span>
+                                      <span className="text-[10px] font-black text-red-600/80 uppercase">{entry.weight} kg</span>
                                     </>
                                   )}
                                 </div>
@@ -358,7 +363,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                             ))}
                           </div>
                           {log.notes && (
-                            <div className="mt-4 p-4 bg-neutral-900/50 border border-neutral-800 rounded-2xl">
+                            <div className="mt-4 p-4 bg-neutral-50 border border-black/5 rounded-2xl">
                               <p className="text-[10px] font-black text-neutral-500 uppercase mb-1">Notes</p>
                               <p className="text-sm text-neutral-400 italic">"{log.notes}"</p>
                             </div>
@@ -367,8 +372,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-20 text-neutral-600 border border-dashed border-neutral-800 rounded-2xl">
-                      <p className="text-sm font-bold uppercase tracking-widest">No workout history yet.</p>
+                    <div className="text-center py-20 text-neutral-400 border border-dashed border-black/10 rounded-2xl">
+                      <p className="text-sm font-bold uppercase tracking-widest text-black">No workout history yet.</p>
                       <p className="text-xs mt-2">Log your first session above to see it here!</p>
                     </div>
                   )}
@@ -376,7 +381,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
               </div>
 
               <div className="space-y-6">
-                <div className="bg-lime-500 text-black rounded-3xl p-8 shadow-lg shadow-lime-500/10">
+                <div className="bg-red-600 text-white rounded-3xl p-8 shadow-lg shadow-red-600/10">
                   <p className="text-[10px] font-black uppercase tracking-widest mb-2 opacity-60">Daily Focus</p>
                   <h4 className="text-2xl font-black italic brand-font mb-4">CONSISTENCY IS KEY</h4>
                   <p className="text-sm font-medium leading-relaxed">
@@ -384,22 +389,22 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                   </p>
                 </div>
 
-                <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-xl">
+                <div className="bg-white border border-black/5 rounded-3xl p-8 shadow-xl">
                   <h4 className="text-sm font-bold uppercase tracking-widest text-neutral-500 mb-6 flex items-center gap-2">
-                    <i className="fas fa-bullseye text-lime-500"></i> My Goals
+                    <i className="fas fa-bullseye text-red-600"></i> My Goals
                   </h4>
                   {data.health?.targetWeight ? (
                     <div className="space-y-6">
                       <div>
                         <div className="flex justify-between items-end mb-2">
                           <span className="text-xs font-bold text-neutral-400 uppercase">Weight Goal</span>
-                          <span className="text-xs font-bold text-lime-500 uppercase">
+                          <span className="text-xs font-bold text-red-600 uppercase">
                             {data.health.weight}kg <i className="fas fa-arrow-right mx-1 text-[10px]"></i> {data.health.targetWeight}kg
                           </span>
                         </div>
-                        <div className="h-2 bg-neutral-800 rounded-full overflow-hidden">
+                        <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
                           <div 
-                            className="h-full bg-lime-500 rounded-full transition-all duration-1000"
+                            className="h-full bg-red-600 rounded-full transition-all duration-1000"
                             style={{ 
                               width: `${Math.min(100, Math.max(0, (1 - (Math.abs(Number(data.health.targetWeight) - Number(data.health.weight)) / Math.abs(Number(data.health.targetWeight) - (Number(data.health.weight) + 10)))) * 100))}%` 
                             }}
@@ -411,22 +416,22 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center py-8 text-neutral-600 border border-dashed border-neutral-800 rounded-2xl">
-                      <p className="text-xs font-bold uppercase tracking-widest">No specific goals set.</p>
+                    <div className="text-center py-8 text-neutral-400 border border-dashed border-black/10 rounded-2xl">
+                      <p className="text-xs font-bold uppercase tracking-widest text-black">No specific goals set.</p>
                     </div>
                   )}
                 </div>
 
-                <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8">
+                <div className="bg-white border border-black/5 rounded-3xl p-8 shadow-sm">
                   <h4 className="text-sm font-bold uppercase tracking-widest text-neutral-500 mb-6">Quick Stats</h4>
                   <div className="space-y-4">
-                    <div className="flex justify-between items-center p-4 bg-neutral-800/50 rounded-2xl border border-neutral-700/30">
+                    <div className="flex justify-between items-center p-4 bg-neutral-50 rounded-2xl border border-black/5">
                       <span className="text-xs font-bold text-neutral-400 uppercase">Weight</span>
-                      <span className="text-lg font-black text-white">{data.health?.weight || '--'} kg</span>
+                      <span className="text-lg font-black text-black">{data.health?.weight || '--'} kg</span>
                     </div>
-                    <div className="flex justify-between items-center p-4 bg-neutral-800/50 rounded-2xl border border-neutral-700/30">
+                    <div className="flex justify-between items-center p-4 bg-neutral-50 rounded-2xl border border-black/5">
                       <span className="text-xs font-bold text-neutral-400 uppercase">Sessions</span>
-                      <span className="text-lg font-black text-white">{(data.attendance || []).filter((a: any) => a.status === 'Present').length}</span>
+                      <span className="text-lg font-black text-black">{(data.attendance || []).filter((a: any) => a.status === 'Present').length}</span>
                     </div>
                   </div>
                 </div>
@@ -437,23 +442,23 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
       case 'diet':
         return (
           <div className="space-y-8">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-xl">
+            <div className="bg-white border border-black/5 rounded-3xl p-8 shadow-xl">
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold flex items-center gap-3">
-                  <i className="fas fa-utensils text-lime-500"></i>
+                <h3 className="text-2xl font-bold flex items-center gap-3 text-black">
+                  <i className="fas fa-utensils text-red-600"></i>
                   Nutrition Guide
                 </h3>
-                <span className="text-[10px] font-black uppercase text-neutral-500 bg-neutral-800 px-3 py-1 rounded-full border border-neutral-700">
+                <span className="text-[10px] font-black uppercase text-neutral-500 bg-neutral-50 px-3 py-1 rounded-full border border-black/10">
                   Updated {data.diet ? new Date(data.diet.updatedAt).toLocaleDateString() : 'N/A'}
                 </span>
               </div>
               {data.diet ? (
-                <div className="whitespace-pre-wrap font-mono text-neutral-300 leading-relaxed bg-neutral-950 p-8 rounded-2xl border border-neutral-800 text-sm">
+                <div className="whitespace-pre-wrap font-mono text-neutral-700 leading-relaxed bg-neutral-50 p-8 rounded-2xl border border-black/10 text-sm">
                   {data.diet.plan}
                 </div>
               ) : (
-                <div className="text-center py-20 text-neutral-500 border border-dashed border-neutral-800 rounded-2xl">
-                   <p className="font-bold uppercase tracking-widest text-sm mb-2">No Diet Plan Assigned Yet</p>
+                <div className="text-center py-20 text-neutral-400 border border-dashed border-black/10 rounded-2xl">
+                   <p className="font-bold uppercase tracking-widest text-sm mb-2 text-black">No Diet Plan Assigned Yet</p>
                    <p className="text-xs">Your personalized nutrition plan will appear here.</p>
                 </div>
               )}
@@ -464,31 +469,31 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
         return (
           <div className="space-y-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-xl">
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                  <i className="fas fa-chart-bar text-lime-500"></i>
+              <div className="bg-white border border-black/5 rounded-3xl p-8 shadow-xl">
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-black">
+                  <i className="fas fa-chart-bar text-red-600"></i>
                   Workout Frequency (Weekly)
                 </h3>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData.frequency}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                      <XAxis dataKey="date" stroke="#666" fontSize={10} tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} />
-                      <YAxis stroke="#666" fontSize={10} allowDecimals={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+                      <XAxis dataKey="date" stroke="#999" fontSize={10} tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} />
+                      <YAxis stroke="#999" fontSize={10} allowDecimals={false} />
                       <Tooltip 
-                        contentStyle={{ backgroundColor: '#171717', border: '1px solid #333', borderRadius: '8px' }}
-                        itemStyle={{ color: '#fff' }}
-                        labelStyle={{ color: '#888' }}
+                        contentStyle={{ backgroundColor: '#fff', border: '1px solid #eee', borderRadius: '8px' }}
+                        itemStyle={{ color: '#000' }}
+                        labelStyle={{ color: '#999' }}
                       />
-                      <Bar dataKey="count" fill="#84cc16" radius={[4, 4, 0, 0]} name="Sessions" />
+                      <Bar dataKey="count" fill="#dc2626" radius={[4, 4, 0, 0]} name="Sessions" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-xl">
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                  <i className="fas fa-chart-line text-lime-500"></i>
+              <div className="bg-white border border-black/5 rounded-3xl p-8 shadow-xl">
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-black">
+                  <i className="fas fa-chart-line text-red-600"></i>
                   Volume Progress (Last 10 Sessions)
                 </h3>
                 <div className="h-64">
@@ -496,19 +501,19 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                     <AreaChart data={chartData.volume}>
                       <defs>
                         <linearGradient id="colorVolume" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#84cc16" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#84cc16" stopOpacity={0}/>
+                          <stop offset="5%" stopColor="#dc2626" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#dc2626" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                      <XAxis dataKey="date" stroke="#666" fontSize={10} tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} />
-                      <YAxis stroke="#666" fontSize={10} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+                      <XAxis dataKey="date" stroke="#999" fontSize={10} tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} />
+                      <YAxis stroke="#999" fontSize={10} />
                       <Tooltip 
-                        contentStyle={{ backgroundColor: '#171717', border: '1px solid #333', borderRadius: '8px' }}
-                        itemStyle={{ color: '#fff' }}
-                        labelStyle={{ color: '#888' }}
+                        contentStyle={{ backgroundColor: '#fff', border: '1px solid #eee', borderRadius: '8px' }}
+                        itemStyle={{ color: '#000' }}
+                        labelStyle={{ color: '#999' }}
                       />
-                      <Area type="monotone" dataKey="volume" stroke="#84cc16" fillOpacity={1} fill="url(#colorVolume)" name="Volume (kg)" />
+                      <Area type="monotone" dataKey="volume" stroke="#dc2626" fillOpacity={1} fill="url(#colorVolume)" name="Volume (kg)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -516,25 +521,35 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-xl">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <i className="fas fa-calendar-check text-lime-500"></i>
+              <div className="lg:col-span-2 bg-white border border-black/5 rounded-3xl p-8 shadow-xl">
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-black">
+                <i className="fas fa-calendar-check text-red-600"></i>
                 Attendance Record
               </h3>
+              
+              {rescheduleSuccess && (
+                <div className="mb-4 p-3 bg-red-600/10 border border-red-600/20 rounded-xl animate-fade-in">
+                  <p className="text-red-600 font-bold text-xs flex items-center justify-center gap-2">
+                    <i className="fas fa-check-circle"></i>
+                    {rescheduleSuccess}
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                 {(data.attendance || []).length > 0 ? (data.attendance || []).slice().reverse().map((log: any) => (
-                  <div key={log.id} className="flex flex-col p-5 bg-neutral-800/50 border border-neutral-700/50 rounded-2xl transition-all hover:border-neutral-600">
+                  <div key={log.id} className="flex flex-col p-5 bg-neutral-50 border border-black/5 rounded-2xl transition-all hover:border-black/10">
                     <div className="flex items-center justify-between w-full">
                       <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${log.status === 'Present' ? 'bg-lime-500/10 text-lime-500' : 'bg-red-500/10 text-red-500'}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${log.status === 'Present' ? 'bg-red-600/10 text-red-600' : 'bg-orange-500/10 text-orange-500'}`}>
                           <i className={`fas ${log.status === 'Present' ? 'fa-check' : 'fa-times'}`}></i>
                         </div>
                         <div>
-                          <p className="text-sm font-bold">{new Date(log.date).toLocaleDateString()}</p>
+                          <p className="text-sm font-bold text-black">{new Date(log.date).toLocaleDateString()}</p>
                           <p className="text-[10px] text-neutral-500 uppercase font-black">{new Date(log.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                         </div>
                       </div>
-                      <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase ${log.status === 'Present' ? 'bg-lime-500/10 text-lime-500' : 'bg-red-500/10 text-red-500'}`}>
+                      <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase ${log.status === 'Present' ? 'bg-red-600/10 text-red-600' : 'bg-orange-500/10 text-orange-500'}`}>
                         {log.status}
                       </span>
                     </div>
@@ -546,9 +561,9 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                             return (
                               <div className="flex items-center gap-2">
                                 <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${
-                                  request.status === 'Approved' ? 'bg-lime-500/20 text-lime-500' :
-                                  request.status === 'Rejected' ? 'bg-red-500/20 text-red-500' :
-                                  'bg-yellow-500/20 text-yellow-500'
+                                  request.status === 'Approved' ? 'bg-red-600/20 text-red-600' :
+                                  request.status === 'Rejected' ? 'bg-orange-500/20 text-orange-500' :
+                                  'bg-blue-500/20 text-blue-500'
                                 }`}>
                                   Reschedule: {request.status}
                                 </span>
@@ -561,7 +576,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                           return (
                             <button
                               onClick={() => handleOpenReschedule(log)}
-                              className="text-[10px] font-bold uppercase text-lime-500 hover:text-lime-400 transition-colors flex items-center gap-1"
+                              className="mt-2 w-full py-2 bg-red-600/5 border border-red-600/20 text-red-600 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-600 hover:text-white transition-all flex items-center justify-center gap-2"
                             >
                               <i className="fas fa-clock"></i> Request Reschedule
                             </button>
@@ -571,41 +586,41 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                     )}
                   </div>
                 )) : (
-                  <div className="text-center py-20 text-neutral-600 border border-dashed border-neutral-800 rounded-2xl">
-                    <p className="text-sm font-bold uppercase tracking-widest">No sessions recorded yet.</p>
+                  <div className="text-center py-20 text-neutral-400 border border-dashed border-black/10 rounded-2xl">
+                    <p className="text-sm font-bold uppercase tracking-widest text-black">No sessions recorded yet.</p>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-xl">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <i className="fas fa-id-card text-lime-500"></i>
+            <div className="bg-white border border-black/5 rounded-3xl p-8 shadow-xl">
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-black">
+                <i className="fas fa-id-card text-red-600"></i>
                 Membership
               </h3>
               {(data.payments || []).length > 0 && (data.payments || [])[(data.payments || []).length - 1] ? (
                  <div className="space-y-6">
-                    <div className="p-8 bg-lime-500/5 border border-lime-500/20 rounded-3xl text-center">
+                    <div className="p-8 bg-red-600/5 border border-red-600/20 rounded-3xl text-center">
                        <p className="text-neutral-500 text-[10px] font-black uppercase tracking-widest mb-2">Active Plan</p>
-                       <p className="text-3xl font-black text-lime-500 italic brand-font">{(data.payments || [])[(data.payments || []).length - 1].package}</p>
+                       <p className="text-3xl font-black text-red-600 italic brand-font">{(data.payments || [])[(data.payments || []).length - 1].package}</p>
                     </div>
                     <div className="space-y-4">
                       <div className="flex justify-between items-center text-sm px-2">
                          <span className="text-neutral-500 font-bold uppercase tracking-wider text-[10px]">Status</span>
                          <span className={`px-4 py-1 rounded-full font-black text-[10px] uppercase ${
-                           (data.payments || [])[(data.payments || []).length - 1].status === 'Paid' ? 'bg-lime-500 text-black' : 'bg-red-500 text-white'
+                           (data.payments || [])[(data.payments || []).length - 1].status === 'Paid' ? 'bg-red-600 text-white' : 'bg-orange-500 text-white'
                          }`}>
                            {(data.payments || [])[(data.payments || []).length - 1].status}
                          </span>
                       </div>
                       <div className="flex justify-between items-center text-sm px-2">
                          <span className="text-neutral-500 font-bold uppercase tracking-wider text-[10px]">Next Due</span>
-                         <span className="font-bold text-white">{(data.payments || [])[(data.payments || []).length - 1].dueDate}</span>
+                         <span className="font-bold text-black">{(data.payments || [])[(data.payments || []).length - 1].dueDate}</span>
                       </div>
                     </div>
                  </div>
               ) : (
-                <div className="text-center py-10 text-neutral-600">
+                <div className="text-center py-10 text-neutral-400">
                   <p className="text-sm">Membership info not updated.</p>
                 </div>
               )}
@@ -616,24 +631,24 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
       case 'notifications':
         return (
           <div className="space-y-6">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-xl">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <i className="fas fa-bell text-lime-500"></i>
+            <div className="bg-white border border-black/5 rounded-3xl p-8 shadow-xl">
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-black">
+                <i className="fas fa-bell text-red-600"></i>
                 Notifications
               </h3>
               <div className="space-y-4">
                 {notifications.length > 0 ? notifications.slice().reverse().map((notif: any) => (
-                  <div key={notif.id} className="p-6 bg-neutral-800/50 border border-neutral-700/50 rounded-2xl relative overflow-hidden group">
-                    {!notif.read && <div className="absolute top-0 left-0 w-1 h-full bg-lime-500"></div>}
+                  <div key={notif.id} className="p-6 bg-neutral-50 border border-black/5 rounded-2xl relative overflow-hidden group">
+                    {!notif.read && <div className="absolute top-0 left-0 w-1 h-full bg-red-600"></div>}
                     <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-bold text-white">{notif.title}</h4>
+                      <h4 className="font-bold text-black">{notif.title}</h4>
                       <span className="text-[10px] text-neutral-500 font-bold uppercase">{new Date(notif.date).toLocaleDateString()}</span>
                     </div>
                     <p className="text-sm text-neutral-400 leading-relaxed">{notif.message}</p>
                   </div>
                 )) : (
-                  <div className="text-center py-20 text-neutral-600 border border-dashed border-neutral-800 rounded-2xl">
-                    <p className="text-sm font-bold uppercase tracking-widest">No notifications yet.</p>
+                  <div className="text-center py-20 text-neutral-400 border border-dashed border-black/10 rounded-2xl">
+                    <p className="text-sm font-bold uppercase tracking-widest text-black">No notifications yet.</p>
                   </div>
                 )}
               </div>
@@ -644,13 +659,13 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
       case 'photos':
         return (
           <div className="space-y-8">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-xl">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <i className="fas fa-camera text-lime-500"></i>
+            <div className="bg-white border border-black/5 rounded-3xl p-8 shadow-xl">
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-black">
+                <i className="fas fa-camera text-red-600"></i>
                 Progress Photos
               </h3>
               
-              <div className="mb-8 p-6 bg-neutral-800/50 rounded-2xl border border-neutral-700">
+              <div className="mb-8 p-6 bg-neutral-50 rounded-2xl border border-black/5">
                 <label className="block text-[10px] font-black text-neutral-500 uppercase mb-4">Upload New Photo</label>
                 <div className="flex gap-4">
                   <input 
@@ -668,14 +683,14 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                         reader.readAsDataURL(file);
                       }
                     }}
-                    className="block w-full text-sm text-neutral-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-lime-500 file:text-black hover:file:bg-lime-400"
+                    className="block w-full text-sm text-neutral-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-red-600 file:text-white hover:file:bg-red-500"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {(data.progressPhotos || []).map((photo: any) => (
-                  <div key={photo.id} className="bg-neutral-800 rounded-2xl overflow-hidden border border-neutral-700">
+                  <div key={photo.id} className="bg-neutral-50 rounded-2xl overflow-hidden border border-black/5">
                     <img src={photo.imageUrl} alt="Progress" className="w-full h-48 object-cover" />
                     <div className="p-4">
                       <p className="text-[10px] text-neutral-500 font-bold uppercase">{new Date(photo.date).toLocaleDateString()}</p>
@@ -691,7 +706,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
   };
 
   return (
-    <div className="flex h-screen bg-neutral-950 overflow-hidden">
+    <div className="flex h-screen bg-neutral-50 overflow-hidden">
       <Sidebar role={UserRole.CLIENT} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={onLogout} />
       
       <main className="flex-1 lg:ml-64 overflow-y-auto p-6 lg:p-10">
@@ -699,8 +714,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
           <div className="flex items-center gap-4">
             <Logo size={48} />
             <div>
-              <h2 className="text-3xl font-black text-white italic tracking-tighter brand-font uppercase">
-                Power Up, <span className="text-lime-500">{user.name || 'Member'}</span>
+              <h2 className="text-3xl font-black text-black italic tracking-tighter brand-font uppercase">
+                Power Up, <span className="text-red-600">{user.name || 'Member'}</span>
               </h2>
               <p className="text-neutral-500 text-sm mt-1">Keep pushing boundaries. Your goals are within reach.</p>
             </div>
@@ -708,12 +723,12 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
           <div className="flex items-center gap-4 self-end sm:self-auto">
             <button 
               onClick={() => fetchData()}
-              className="hidden sm:flex bg-neutral-900 border border-neutral-800 rounded-full px-4 py-2 items-center space-x-2 text-[10px] uppercase font-black tracking-widest hover:border-lime-500 transition-colors group"
+              className="hidden sm:flex bg-white border border-black/5 rounded-full px-4 py-2 items-center space-x-2 text-[10px] uppercase font-black tracking-widest hover:border-red-600 transition-colors group shadow-sm"
             >
-                <div className={`w-2 h-2 rounded-full bg-lime-500 ${loading ? 'animate-spin' : 'animate-pulse'}`}></div>
-                <span className="text-neutral-400 group-hover:text-lime-500">Sync Now</span>
+                <div className={`w-2 h-2 rounded-full bg-red-600 ${loading ? 'animate-spin' : 'animate-pulse'}`}></div>
+                <span className="text-neutral-500 group-hover:text-red-600">Sync Now</span>
             </button>
-            <div className="w-12 h-12 rounded-2xl bg-lime-500 flex items-center justify-center text-black shadow-lg shadow-lime-500/20">
+            <div className="w-12 h-12 rounded-2xl bg-red-600 flex items-center justify-center text-white shadow-lg shadow-red-600/20">
                <i className="fas fa-user-circle text-2xl"></i>
             </div>
           </div>
@@ -723,13 +738,13 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
 
         {rescheduleModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 w-full max-w-md shadow-2xl animate-scale-in">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <i className="fas fa-calendar-alt text-lime-500"></i>
+            <div className="bg-white border border-black/5 rounded-3xl p-8 w-full max-w-md shadow-2xl animate-scale-in">
+              <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-black">
+                <i className="fas fa-calendar-alt text-red-600"></i>
                 Request Reschedule
               </h3>
               <p className="text-sm text-neutral-400 mb-6">
-                Request a new time for your missed session on <span className="text-white font-bold">{selectedMissedSession && new Date(selectedMissedSession.date).toLocaleDateString()}</span>.
+                Request a new time for your missed session on <span className="text-black font-bold">{selectedMissedSession && new Date(selectedMissedSession.date).toLocaleDateString()}</span>.
               </p>
               
               <div className="space-y-4 mb-6">
@@ -739,7 +754,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                     type="datetime-local" 
                     value={requestedDate}
                     onChange={(e) => setRequestedDate(e.target.value)}
-                    className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 text-sm focus:border-lime-500 outline-none text-white"
+                    className="w-full bg-neutral-50 border border-black/10 rounded-xl px-4 py-3 text-sm focus:border-red-600 outline-none text-black"
                   />
                 </div>
                 <div>
@@ -747,7 +762,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
                   <textarea 
                     value={requestNote}
                     onChange={(e) => setRequestNote(e.target.value)}
-                    className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 text-sm focus:border-lime-500 outline-none text-white h-24 resize-none"
+                    className="w-full bg-neutral-50 border border-black/10 rounded-xl px-4 py-3 text-sm focus:border-red-600 outline-none text-black h-24 resize-none"
                     placeholder="Any specific preferences?"
                   />
                 </div>
@@ -756,14 +771,14 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
               <div className="flex gap-3">
                 <button 
                   onClick={() => setRescheduleModalOpen(false)}
-                  className="flex-1 py-3 bg-neutral-800 text-white font-bold rounded-xl hover:bg-neutral-700 transition-colors"
+                  className="flex-1 py-3 bg-neutral-100 text-black font-bold rounded-xl hover:bg-neutral-200 transition-colors"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={() => setConfirmRescheduleModalOpen(true)}
                   disabled={!requestedDate}
-                  className="flex-1 py-3 bg-lime-500 text-black font-bold rounded-xl hover:bg-lime-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-red-600/20"
                 >
                   Submit Request
                 </button>
@@ -774,15 +789,15 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
 
         {confirmWorkoutModalOpen && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center">
-              <div className="w-16 h-16 bg-lime-500/10 text-lime-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="bg-white border border-black/5 rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+              <div className="w-16 h-16 bg-red-600/10 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <i className="fas fa-question text-2xl"></i>
               </div>
-              <h3 className="text-xl font-bold mb-2 text-white">Log Workout?</h3>
+              <h3 className="text-xl font-bold mb-2 text-black">Log Workout?</h3>
               <p className="text-sm text-neutral-400 mb-6">Are you sure you want to submit this workout log? You cannot edit it once submitted.</p>
               <div className="flex gap-3">
-                <button onClick={() => setConfirmWorkoutModalOpen(false)} className="flex-1 py-3 bg-neutral-800 text-white font-bold rounded-xl hover:bg-neutral-700 transition-colors">Cancel</button>
-                <button onClick={submitWorkoutLog} className="flex-1 py-3 bg-lime-500 text-black font-bold rounded-xl hover:bg-lime-400 transition-colors">Confirm</button>
+                <button onClick={() => setConfirmWorkoutModalOpen(false)} className="flex-1 py-3 bg-neutral-100 text-black font-bold rounded-xl hover:bg-neutral-200 transition-colors">Cancel</button>
+                <button onClick={submitWorkoutLog} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-500 transition-colors shadow-lg shadow-red-600/20">Confirm</button>
               </div>
             </div>
           </div>
@@ -790,15 +805,15 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, onLogout }) => 
 
         {confirmRescheduleModalOpen && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center">
-              <div className="w-16 h-16 bg-yellow-500/10 text-yellow-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="bg-white border border-black/5 rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+              <div className="w-16 h-16 bg-orange-500/10 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
                 <i className="fas fa-exclamation-triangle text-2xl"></i>
               </div>
-              <h3 className="text-xl font-bold mb-2 text-white">Submit Request?</h3>
+              <h3 className="text-xl font-bold mb-2 text-black">Submit Request?</h3>
               <p className="text-sm text-neutral-400 mb-6">Are you sure you want to request a reschedule for this session?</p>
               <div className="flex gap-3">
-                <button onClick={() => setConfirmRescheduleModalOpen(false)} className="flex-1 py-3 bg-neutral-800 text-white font-bold rounded-xl hover:bg-neutral-700 transition-colors">Cancel</button>
-                <button onClick={handleSubmitReschedule} className="flex-1 py-3 bg-lime-500 text-black font-bold rounded-xl hover:bg-lime-400 transition-colors">Confirm</button>
+                <button onClick={() => setConfirmRescheduleModalOpen(false)} className="flex-1 py-3 bg-neutral-100 text-black font-bold rounded-xl hover:bg-neutral-200 transition-colors">Cancel</button>
+                <button onClick={handleSubmitReschedule} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-500 transition-colors shadow-lg shadow-red-600/20">Confirm</button>
               </div>
             </div>
           </div>

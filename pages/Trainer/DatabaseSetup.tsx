@@ -50,30 +50,30 @@ const DatabaseSetup: React.FC = () => {
   };
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
+    <div className="p-8 max-w-2xl mx-auto bg-white rounded-3xl shadow-sm border border-black/5">
       <div className="flex items-center gap-3 mb-8">
-        <div className="w-12 h-12 rounded-xl bg-lime-500/10 flex items-center justify-center">
-          <Database className="w-6 h-6 text-lime-500" />
+        <div className="w-12 h-12 rounded-xl bg-red-600/10 flex items-center justify-center">
+          <Database className="w-6 h-6 text-red-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold">Cloud Database Setup</h1>
+          <h1 className="text-2xl font-bold text-black">Cloud Database Setup</h1>
           <p className="text-neutral-400 text-sm">Configure your Firebase Firestore connection</p>
         </div>
       </div>
 
       {currentConfig?.projectId && (
-        <div className={`mb-8 p-4 rounded-xl border flex items-start gap-3 ${currentConfig.isConnected ? 'bg-lime-500/5 border-lime-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+        <div className={`mb-8 p-4 rounded-xl border flex items-start gap-3 ${currentConfig.isConnected ? 'bg-red-600/5 border-red-600/20' : 'bg-orange-500/5 border-orange-500/20'}`}>
           {currentConfig.isConnected ? (
-            <Check className="w-5 h-5 text-lime-500 shrink-0 mt-0.5" />
+            <Check className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
           ) : (
-            <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
           )}
           <div>
-            <p className={`text-sm font-medium ${currentConfig.isConnected ? 'text-lime-500' : 'text-red-500'}`}>
+            <p className={`text-sm font-medium ${currentConfig.isConnected ? 'text-red-600' : 'text-orange-500'}`}>
               {currentConfig.isConnected ? 'Connected to Cloud' : 'Connection Failed'}
             </p>
             <p className="text-xs text-neutral-400 mt-1">
-              Project: <span className="text-white">{currentConfig.projectId}</span>
+              Project: <span className="text-black font-bold">{currentConfig.projectId}</span>
             </p>
           </div>
         </div>
@@ -87,7 +87,7 @@ const DatabaseSetup: React.FC = () => {
               type="text"
               value={config.projectId}
               onChange={e => setConfig({ ...config, projectId: e.target.value })}
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 focus:outline-none focus:border-lime-500 transition-colors"
+              className="w-full bg-neutral-50 border border-black/5 rounded-xl px-4 py-3 focus:outline-none focus:border-red-600 transition-colors text-black"
               placeholder="e.g. speed-fit-b273a"
               required
             />
@@ -99,7 +99,7 @@ const DatabaseSetup: React.FC = () => {
               type="email"
               value={config.clientEmail}
               onChange={e => setConfig({ ...config, clientEmail: e.target.value })}
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 focus:outline-none focus:border-lime-500 transition-colors"
+              className="w-full bg-neutral-50 border border-black/5 rounded-xl px-4 py-3 focus:outline-none focus:border-red-600 transition-colors text-black"
               placeholder="firebase-adminsdk-..."
               required
             />
@@ -110,11 +110,11 @@ const DatabaseSetup: React.FC = () => {
             <textarea
               value={config.privateKey}
               onChange={e => setConfig({ ...config, privateKey: e.target.value })}
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 focus:outline-none focus:border-lime-500 transition-colors h-48 font-mono text-xs"
+              className="w-full bg-neutral-50 border border-black/5 rounded-xl px-4 py-3 focus:outline-none focus:border-red-600 transition-colors h-48 font-mono text-xs text-black"
               placeholder="-----BEGIN PRIVATE KEY-----\n..."
               required
             />
-            <p className="text-[10px] text-neutral-500 mt-2 flex items-center gap-1">
+            <p className="text-[10px] text-neutral-400 mt-2 flex items-center gap-1">
               <Shield className="w-3 h-3" />
               Your key is stored securely on the server and never exposed to the client.
             </p>
@@ -126,8 +126,8 @@ const DatabaseSetup: React.FC = () => {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className={`p-4 rounded-xl flex items-center gap-3 ${
-              status.type === 'success' ? 'bg-lime-500/10 text-lime-500' : 
-              status.type === 'error' ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-500'
+              status.type === 'success' ? 'bg-red-600/10 text-red-600' : 
+              status.type === 'error' ? 'bg-orange-500/10 text-orange-500' : 'bg-blue-500/10 text-blue-500'
             }`}
           >
             {status.type === 'loading' ? <Loader2 className="w-5 h-5 animate-spin" /> :
@@ -139,19 +139,19 @@ const DatabaseSetup: React.FC = () => {
         <button
           type="submit"
           disabled={status.type === 'loading'}
-          className="w-full bg-lime-500 text-black font-bold py-4 rounded-xl hover:bg-lime-400 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+          className="w-full bg-red-600 text-white font-bold py-4 rounded-xl hover:bg-red-500 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-red-600/20"
         >
           {status.type === 'loading' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
           Save Configuration
         </button>
       </form>
 
-      <div className="mt-12 p-6 rounded-2xl bg-neutral-900 border border-neutral-800">
-        <h3 className="font-bold mb-4 flex items-center gap-2">
-          <AlertCircle className="w-5 h-5 text-lime-500" />
+      <div className="mt-12 p-6 rounded-2xl bg-neutral-50 border border-black/5">
+        <h3 className="font-bold mb-4 flex items-center gap-2 text-black">
+          <AlertCircle className="w-5 h-5 text-red-600" />
           Important Note
         </h3>
-        <ul className="space-y-3 text-sm text-neutral-400">
+        <ul className="space-y-3 text-sm text-neutral-500">
           <li>• Ensure your Firestore is in <b>Test Mode</b> or has correct rules.</li>
           <li>• The Private Key must include the <b>\n</b> characters for line breaks.</li>
           <li>• After saving, the app will attempt to reconnect to the cloud database.</li>

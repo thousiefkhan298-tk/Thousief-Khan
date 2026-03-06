@@ -62,13 +62,13 @@ const PaymentManager: React.FC<{ clients: User[] }> = ({ clients = [] }) => {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
       <div className="lg:col-span-1 space-y-4">
-        <h3 className="text-sm font-bold text-neutral-500 uppercase tracking-widest px-4">Billing Status</h3>
+        <h3 className="text-sm font-bold text-neutral-400 uppercase tracking-widest px-4">Billing Status</h3>
         <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
           {clients.map(c => (
             <button
               key={c.id}
               onClick={() => setActiveClient(c.id)}
-              className={`w-full p-4 rounded-2xl text-left border transition-all ${activeClient === c.id ? 'bg-lime-500 border-lime-500 text-black font-bold' : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'}`}
+              className={`w-full p-4 rounded-2xl text-left border transition-all ${activeClient === c.id ? 'bg-red-600 border-red-600 text-white font-bold' : 'bg-white border-black/5 text-neutral-600 hover:border-red-600/20'}`}
             >
               <div className="text-sm font-bold truncate">{c.name || c.email}</div>
             </button>
@@ -79,15 +79,15 @@ const PaymentManager: React.FC<{ clients: User[] }> = ({ clients = [] }) => {
       <div className="lg:col-span-3 space-y-8">
         {activeClient ? (
           <>
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8">
-              <h3 className="text-xl font-bold mb-6">Add New Payment Entry</h3>
+            <div className="bg-white border border-black/5 rounded-3xl p-8 shadow-sm">
+              <h3 className="text-xl font-bold mb-6 text-black">Add New Payment Entry</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Package Plan</label>
+                  <label className="block text-xs font-bold text-neutral-400 uppercase mb-2">Package Plan</label>
                   <select 
                     value={newPayment.package} 
                     onChange={e => setNewPayment({...newPayment, package: e.target.value})}
-                    className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3"
+                    className="w-full bg-neutral-50 border border-black/5 rounded-xl px-4 py-3 text-black"
                   >
                     <option>Monthly Silver</option>
                     <option>Monthly Gold</option>
@@ -96,11 +96,11 @@ const PaymentManager: React.FC<{ clients: User[] }> = ({ clients = [] }) => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Status</label>
+                  <label className="block text-xs font-bold text-neutral-400 uppercase mb-2">Status</label>
                   <select 
                     value={newPayment.status} 
                     onChange={e => setNewPayment({...newPayment, status: e.target.value as any})}
-                    className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3"
+                    className="w-full bg-neutral-50 border border-black/5 rounded-xl px-4 py-3 text-black"
                   >
                     <option value="Paid">Paid</option>
                     <option value="Pending">Pending</option>
@@ -108,50 +108,50 @@ const PaymentManager: React.FC<{ clients: User[] }> = ({ clients = [] }) => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Due Date</label>
+                  <label className="block text-xs font-bold text-neutral-400 uppercase mb-2">Due Date</label>
                   <input 
                     type="date" 
                     value={newPayment.dueDate}
                     onChange={e => setNewPayment({...newPayment, dueDate: e.target.value})}
-                    className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3"
+                    className="w-full bg-neutral-50 border border-black/5 rounded-xl px-4 py-3 text-black"
                   />
                 </div>
                 <div className="flex items-end">
-                  <button onClick={handleSave} className="w-full py-3 bg-lime-500 text-black font-bold rounded-xl hover:bg-lime-400">Save Record</button>
+                  <button onClick={handleSave} className="w-full py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-500 shadow-lg shadow-red-600/20 transition-all">Save Record</button>
                 </div>
               </div>
             </div>
 
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8">
-               <h3 className="text-xl font-bold mb-6">Billing History</h3>
+            <div className="bg-white border border-black/5 rounded-3xl p-8 shadow-sm">
+               <h3 className="text-xl font-bold mb-6 text-black">Billing History</h3>
                <div className="space-y-4">
                   {(selectedData?.payments || []).length ? (selectedData.payments || []).slice().reverse().map((pay: PaymentRecord) => (
-                    <div key={pay.id} className="flex items-center justify-between p-4 bg-neutral-800/50 rounded-2xl border border-neutral-700">
+                    <div key={pay.id} className="flex items-center justify-between p-4 bg-neutral-50 rounded-2xl border border-black/5">
                        <div className="flex items-center gap-4">
-                         <div className="w-10 h-10 bg-neutral-700 rounded-full flex items-center justify-center">
-                            <i className="fas fa-receipt text-neutral-400"></i>
-                         </div>
-                         <div>
-                            <p className="text-sm font-bold">{pay.package}</p>
-                            <p className="text-xs text-neutral-500">Due: {pay.dueDate}</p>
-                         </div>
+                          <div className="w-10 h-10 bg-white border border-black/5 rounded-full flex items-center justify-center">
+                             <i className="fas fa-receipt text-neutral-400"></i>
+                          </div>
+                          <div>
+                             <p className="text-sm font-bold text-black">{pay.package}</p>
+                             <p className="text-xs text-neutral-500">Due: {pay.dueDate}</p>
+                          </div>
                        </div>
                        <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase ${
-                         pay.status === 'Paid' ? 'bg-lime-500/10 text-lime-500' : 
-                         pay.status === 'Overdue' ? 'bg-red-500/10 text-red-500' : 'bg-orange-500/10 text-orange-500'
+                         pay.status === 'Paid' ? 'bg-red-600/10 text-red-600' : 
+                         pay.status === 'Overdue' ? 'bg-black/5 text-black' : 'bg-neutral-200 text-neutral-500'
                        }`}>
                          {pay.status}
                        </span>
                     </div>
                   )) : (
-                    <p className="text-neutral-500 text-sm text-center py-10">No payment history.</p>
+                    <p className="text-neutral-400 text-sm text-center py-10">No payment history.</p>
                   )}
                </div>
             </div>
           </>
         ) : (
-          <div className="h-96 flex flex-col items-center justify-center text-neutral-600 border border-dashed border-neutral-800 rounded-3xl">
-            <i className="fas fa-money-check-alt text-4xl mb-4"></i>
+          <div className="h-96 flex flex-col items-center justify-center text-neutral-400 border border-dashed border-black/10 rounded-3xl bg-white">
+            <i className="fas fa-money-check-alt text-4xl mb-4 text-neutral-200"></i>
             <p className="font-bold uppercase tracking-widest text-sm">Select a client for billing management</p>
           </div>
         )}

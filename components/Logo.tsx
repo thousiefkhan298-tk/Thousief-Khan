@@ -18,28 +18,20 @@ const Logo: React.FC<LogoProps> = ({ className = "", size = 40 }) => {
     >
       {/* Background Shape */}
       <rect width="100" height="100" rx="24" fill="black" />
-      <rect x="2" y="2" width="96" height="96" rx="22" stroke="#84cc16" strokeWidth="4" strokeOpacity="0.2" />
       
-      {/* "S" part */}
-      <path 
-        d="M45 35H25V55H45V75H25" 
-        stroke="#84cc16" 
-        strokeWidth="12" 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-      />
-      
-      {/* "F" part */}
-      <path 
-        d="M55 75V35H75M55 55H70" 
-        stroke="white" 
-        strokeWidth="12" 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-      />
-      
-      {/* Accent Dot */}
-      <circle cx="80" cy="20" r="6" fill="#84cc16" />
+      {/* Stylized TK Logo */}
+      <g transform="translate(5, 5) scale(0.9)">
+        {/* T part */}
+        <path 
+          d="M25 35H60L57 43H45L38 75H28L35 43H25V35Z" 
+          fill="#dc2626" 
+        />
+        {/* K part */}
+        <path 
+          d="M42 52L65 35H75L53 55L75 75H65L42 58V52Z" 
+          fill="white" 
+        />
+      </g>
     </svg>
   );
 };

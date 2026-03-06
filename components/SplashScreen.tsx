@@ -20,7 +20,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
         <Logo size={120} />
       </div>
       <h1 className="mt-8 text-4xl font-black tracking-tighter text-white uppercase italic brand-font animate-pulse">
-        Speed <span className="text-lime-500">Fit</span>
+        Speed <span className="text-red-600">Fit</span>
       </h1>
       <p className="mt-2 text-xs font-bold tracking-widest text-neutral-500 uppercase">
         Built to Transform
