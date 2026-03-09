@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;700;900&family=Space+Grotesk:wght@300;400;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Anton", sans-serif;
+  --font-mono: "Space Grotesk", monospace;
+  --color-brand-red: #FF0000;
+  --color-brand-dark: #0A0A0A;
+  --color-brand-surface: #171717;
+}
+
+@layer base {
+  body {
+    @apply bg-brand-dark text-white font-sans antialiased;
+  }
+  
+  ::selection {
+    @apply bg-brand-red text-white;
+  }
+}
+
+@layer components {
+  .speedfit-logo {
+    @apply font-display italic uppercase tracking-tighter text-4xl leading-tight text-white flex items-center;
+  }
+
+  .speedfit-logo span {
+    @apply text-brand-red;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-neutral-800 rounded-full hover:bg-brand-red/50 transition-colors;
+  }
+
+  .input-field {
+    @apply w-full bg-brand-surface border border-neutral-800 rounded-2xl px-4 py-4 text-white placeholder-neutral-600 focus:border-brand-red focus:ring-1 focus:ring-brand-red outline-none transition-all;
+  }
+
+  .btn-primary {
+    @apply w-full bg-brand-red text-white font-black py-5 rounded-2xl uppercase tracking-widest flex items-center justify-center space-x-3 hover:bg-red-700 transition-all transform active:scale-[0.98];
+  }
+}
