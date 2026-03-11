@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { api } from '../../lib/api';
+import { firebaseService } from '../../services/firebaseService';
+import { auth } from '../../firebase';
 import Layout from '../../components/Layout';
 import { Message, User } from '../../types';
 import { Send, User as UserIcon, MessageSquare, ShieldCheck, Zap } from 'lucide-react';
@@ -17,12 +18,14 @@ const Messages: React.FC = () => {
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const currentUserData = await api.getMe();
+        const uid = auth.currentUser?.uid;
+        if (!uid) return;
+        const currentUserData = await firebaseService.getUser(uid);
         if (!currentUserData) return;
         setUserData(currentUserData);
 
         // Fetch contacts
-        const contactsData = await api.getUsers();
+        const contactsData = await firebaseService.getUsers();
         // Filter out self
         const otherUsers = contactsData.filter(u => u.id !== currentUserData.id);
         setContacts(otherUsers);
@@ -41,20 +44,19 @@ const Messages: React.FC = () => {
 
   // Fetch messages
   useEffect(() => {
-    if (!selectedContactId) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
 
-    const fetchMessages = async () => {
-      try {
-        const msgs = await api.getMessages(selectedContactId);
-        setAllMessages(msgs);
-      } catch (error) {
-        console.error("Error fetching messages:", error);
-      }
-    };
-
-    fetchMessages();
-    const interval = setInterval(fetchMessages, 5000);
-    return () => clearInterval(interval);
+    const unsubscribe = firebaseService.subscribeToMessages(uid, (msgs) => {
+      // Filter messages for the selected contact
+      const filteredMessages = msgs.filter(m => 
+        (m.senderId === uid && m.receiverId === selectedContactId) ||
+        (m.senderId === selectedContactId && m.receiverId === uid)
+      );
+      setAllMessages(filteredMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
+    });
+    
+    return () => unsubscribe();
   }, [selectedContactId]);
 
   // Scroll to bottom when messages change
@@ -64,20 +66,21 @@ const Messages: React.FC = () => {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedContactId) return;
+    const uid = auth.currentUser?.uid;
+    if (!newMessage.trim() || !selectedContactId || !uid) return;
 
     const msgContent = newMessage.trim();
     setNewMessage(''); // Optimistic clear
 
     try {
-      await api.sendMessage({
+      await firebaseService.sendMessage({
+        senderId: uid,
         receiverId: selectedContactId,
-        content: msgContent
+        participants: [uid, selectedContactId],
+        content: msgContent,
+        timestamp: new Date().toISOString(),
+        read: false
       });
-      
-      // Refresh messages
-      const msgs = await api.getMessages(selectedContactId);
-      setAllMessages(msgs);
     } catch (error) {
       console.error("Error sending message:", error);
       alert("Failed to send message.");

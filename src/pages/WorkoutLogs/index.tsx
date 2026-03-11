@@ -1,14 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { api } from '../../lib/api';
+import { motion, AnimatePresence } from 'motion/react';
+import { firebaseService } from '../../services/firebaseService';
+import { auth } from '../../firebase';
 import Layout from '../../components/Layout';
 import { WorkoutLog, User, FavoriteExercise } from '../../types';
 import { Plus, Trash2, ChevronDown, Star, Search, ClipboardList, Zap, History } from 'lucide-react';
 import { COMMON_EXERCISES } from '../../constants';
 
-const WorkoutLogs: React.FC = () => {
-  const [userData, setUserData] = useState<any>(null);
+interface WorkoutLogsProps {
+  user: any;
+}
+
+const WorkoutLogs: React.FC<WorkoutLogsProps> = ({ user }) => {
+  const [userData, setUserData] = useState<any>(user);
   const [clients, setClients] = useState<User[]>([]);
-  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [selectedClientId, setSelectedClientId] = useState<string>(user.role === 'CLIENT' ? user.uid : '');
   const [logs, setLogs] = useState<WorkoutLog[]>([]);
   const [favorites, setFavorites] = useState<FavoriteExercise[]>([]);
   const [allLoggedExercises, setAllLoggedExercises] = useState<string[]>([]);
@@ -25,31 +31,15 @@ const WorkoutLogs: React.FC = () => {
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const currentUserData = await api.getMe();
-        if (!currentUserData) return;
-        setUserData(currentUserData);
-
-        if (currentUserData.role === 'TRAINER') {
-          const clientsData = await api.getUsers();
-          setClients(clientsData);
-          if (clientsData.length > 0) {
-            setSelectedClientId(clientsData[0].id);
+        if (userData.role === 'TRAINER') {
+          const clientsData = await firebaseService.getUsers();
+          setClients(clientsData.filter(u => u.role === 'CLIENT'));
+          if (clientsData.filter(u => u.role === 'CLIENT').length > 0 && !selectedClientId) {
+            setSelectedClientId(clientsData.filter(u => u.role === 'CLIENT')[0].id);
           }
 
-          const favsData = await api.getFavorites();
+          const favsData = await firebaseService.getFavorites(userData.uid);
           setFavorites(favsData);
-
-          // Fetch all unique logged exercises (simplified for now, could be a separate API)
-          const allLogs = await api.getWorkoutLogs();
-          const uniqueExercises = new Set<string>();
-          allLogs.forEach((log: WorkoutLog) => {
-            log.entries.forEach(entry => {
-              if (entry.exercise) uniqueExercises.add(entry.exercise.trim());
-            });
-          });
-          setAllLoggedExercises(Array.from(uniqueExercises));
-        } else {
-          setSelectedClientId(currentUserData.id);
         }
       } catch (error) {
         console.error("Error fetching initial data:", error);
@@ -64,16 +54,11 @@ const WorkoutLogs: React.FC = () => {
   useEffect(() => {
     if (!selectedClientId) return;
 
-    const fetchLogs = async () => {
-      try {
-        const logsData = await api.getWorkoutLogs(selectedClientId);
-        setLogs(logsData);
-      } catch (error) {
-        console.error("Error fetching logs:", error);
-      }
-    };
+    const unsubscribe = firebaseService.subscribeToWorkoutLogs((logsData) => {
+      setLogs(logsData);
+    }, selectedClientId);
 
-    fetchLogs();
+    return () => unsubscribe();
   }, [selectedClientId]);
 
   const handleAddEntry = () => {
@@ -97,14 +82,14 @@ const WorkoutLogs: React.FC = () => {
     if (!entry.exercise.trim()) return;
 
     try {
-      const result = await api.toggleFavorite({
+      await firebaseService.toggleFavorite(userData.uid, {
         name: entry.exercise.trim(),
         defaultSets: entry.sets,
         defaultReps: entry.reps
       });
 
       // Refresh favorites
-      const favsData = await api.getFavorites();
+      const favsData = await firebaseService.getFavorites(userData.uid);
       setFavorites(favsData);
     } catch (error) {
       console.error("Error toggling favorite:", error);
@@ -146,11 +131,7 @@ const WorkoutLogs: React.FC = () => {
         notes
       };
 
-      await api.saveWorkoutLog(newLog);
-      
-      // Refresh logs
-      const logsData = await api.getWorkoutLogs(selectedClientId);
-      setLogs(logsData);
+      await firebaseService.saveWorkoutLog(newLog);
       
       // Reset form
       setShowForm(false);
@@ -166,8 +147,7 @@ const WorkoutLogs: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this log?')) return;
     try {
-      await api.deleteWorkoutLog(id);
-      setLogs(logs.filter(l => l.id !== id));
+      await firebaseService.deleteWorkoutLog(id);
     } catch (error) {
       console.error("Error deleting log:", error);
     }
@@ -254,7 +234,14 @@ const WorkoutLogs: React.FC = () => {
             <div className="space-y-6" ref={dropdownRef}>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 ml-1">Exercise Sequence</label>
-                <div className="h-[1px] flex-1 bg-neutral-800 mx-4"></div>
+                <button 
+                  type="button" 
+                  onClick={handleAddEntry}
+                  className="flex items-center space-x-2 text-[10px] font-mono uppercase tracking-widest text-brand-red hover:text-red-400 transition-colors ml-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Add Exercise Module</span>
+                </button>
               </div>
               
               {entries.map((entry, index) => {
@@ -447,64 +434,77 @@ const WorkoutLogs: React.FC = () => {
       )}
 
       <div className="space-y-8">
-        {logs.length === 0 ? (
-          <div className="bg-neutral-900/30 rounded-[2.5rem] border border-dashed border-neutral-800 p-20 text-center">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-600 italic">No telemetry data found for this recruit.</p>
-          </div>
-        ) : (
-          logs.map(log => (
-            <div key={log.id} className="bg-neutral-900/50 rounded-[2.5rem] border border-neutral-800 overflow-hidden shadow-xl group hover:border-neutral-700 transition-colors">
-              <div className="bg-neutral-800/30 px-8 py-6 border-b border-neutral-800 flex justify-between items-center">
-                <div className="flex items-center space-x-4">
-                  <Zap className="w-4 h-4 text-brand-red" />
-                  <h3 className="font-display italic text-xl uppercase tracking-wider text-white">
-                    {new Date(log.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                  </h3>
-                </div>
-                {userData?.role === 'TRAINER' && (
-                  <button 
-                    onClick={() => handleDelete(log.id)}
-                    className="text-neutral-600 hover:text-brand-red transition-colors p-2"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                )}
-              </div>
-              <div className="p-8">
-                <div className="overflow-x-auto custom-scrollbar">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="border-b border-neutral-800">
-                        <th className="px-4 py-4 font-mono text-[10px] uppercase tracking-widest text-neutral-500">Exercise Module</th>
-                        <th className="px-4 py-4 font-mono text-[10px] uppercase tracking-widest text-neutral-500 text-center">Sets</th>
-                        <th className="px-4 py-4 font-mono text-[10px] uppercase tracking-widest text-neutral-500 text-center">Reps</th>
-                        <th className="px-4 py-4 font-mono text-[10px] uppercase tracking-widest text-neutral-500 text-center">Load (kg)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-800/50">
-                      {log.entries.map((entry, idx) => (
-                        <tr key={idx} className="hover:bg-neutral-800/20 transition-colors">
-                          <td className="px-4 py-5 font-mono text-[10px] uppercase tracking-widest text-white">{entry.exercise}</td>
-                          <td className="px-4 py-5 font-mono text-[10px] text-neutral-400 text-center">{entry.sets || '-'}</td>
-                          <td className="px-4 py-5 font-mono text-[10px] text-neutral-400 text-center">{entry.reps || '-'}</td>
-                          <td className="px-4 py-5 font-mono text-[10px] text-brand-red font-bold text-center">{entry.weight ? `${entry.weight}` : '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {log.notes && (
-                  <div className="mt-8 pt-8 border-t border-neutral-800">
-                    <p className="text-[8px] font-mono text-neutral-600 uppercase tracking-[0.3em] mb-3">Trainer Observation</p>
-                    <div className="bg-neutral-900/80 p-6 rounded-2xl border border-neutral-800/50 font-mono text-[10px] text-neutral-400 leading-relaxed uppercase tracking-wider">
-                      {log.notes}
-                    </div>
+        <AnimatePresence>
+          {logs.length === 0 ? (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="bg-neutral-900/30 rounded-[2.5rem] border border-dashed border-neutral-800 p-20 text-center"
+            >
+              <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-600 italic">No telemetry data found for this recruit.</p>
+            </motion.div>
+          ) : (
+            logs.map(log => (
+              <motion.div 
+                key={log.id} 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="bg-neutral-900/50 rounded-[2.5rem] border border-neutral-800 overflow-hidden shadow-xl group hover:border-neutral-700 transition-colors"
+              >
+                <div className="bg-neutral-800/30 px-8 py-6 border-b border-neutral-800 flex justify-between items-center">
+                  <div className="flex items-center space-x-4">
+                    <Zap className="w-4 h-4 text-brand-red" />
+                    <h3 className="font-display italic text-xl uppercase tracking-wider text-white">
+                      {new Date(log.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    </h3>
                   </div>
-                )}
-              </div>
-            </div>
-          ))
-        )}
+                  {userData?.role === 'TRAINER' && (
+                    <button 
+                      onClick={() => handleDelete(log.id)}
+                      className="text-neutral-600 hover:text-brand-red transition-colors p-2"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+                <div className="p-8">
+                  <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="border-b border-neutral-800">
+                          <th className="px-4 py-4 font-mono text-[10px] uppercase tracking-widest text-neutral-500">Exercise Module</th>
+                          <th className="px-4 py-4 font-mono text-[10px] uppercase tracking-widest text-neutral-500 text-center">Sets</th>
+                          <th className="px-4 py-4 font-mono text-[10px] uppercase tracking-widest text-neutral-500 text-center">Reps</th>
+                          <th className="px-4 py-4 font-mono text-[10px] uppercase tracking-widest text-neutral-500 text-center">Load (kg)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-800/50">
+                        {log.entries.map((entry, idx) => (
+                          <tr key={idx} className="hover:bg-neutral-800/20 transition-colors">
+                            <td className="px-4 py-5 font-mono text-[10px] uppercase tracking-widest text-white">{entry.exercise}</td>
+                            <td className="px-4 py-5 font-mono text-[10px] text-neutral-400 text-center">{entry.sets || '-'}</td>
+                            <td className="px-4 py-5 font-mono text-[10px] text-neutral-400 text-center">{entry.reps || '-'}</td>
+                            <td className="px-4 py-5 font-mono text-[10px] text-brand-red font-bold text-center">{entry.weight ? `${entry.weight}` : '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {log.notes && (
+                    <div className="mt-8 pt-8 border-t border-neutral-800">
+                      <p className="text-[8px] font-mono text-neutral-600 uppercase tracking-[0.3em] mb-3">Trainer Observation</p>
+                      <div className="bg-neutral-900/80 p-6 rounded-2xl border border-neutral-800/50 font-mono text-[10px] text-neutral-400 leading-relaxed uppercase tracking-wider">
+                        {log.notes}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            ))
+          )}
+        </AnimatePresence>
       </div>
     </Layout>
   );

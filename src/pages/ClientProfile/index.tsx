@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api } from '../../lib/api';
+import { firebaseService } from '../../services/firebaseService';
+import { auth } from '../../firebase';
 import Layout from '../../components/Layout';
 import { User, ClientDetails, HealthAssessment, WorkoutLog, WorkoutPlan } from '../../types';
-import { ArrowLeft, User as UserIcon, Activity, Calendar, FileText, Plus, Edit2, Shield, Target, Zap, Camera, MessageSquare } from 'lucide-react';
+import { ArrowLeft, User as UserIcon, Activity, Calendar, FileText, Plus, Edit2, Shield, Target, Zap, Camera, MessageSquare, CreditCard } from 'lucide-react';
 import ProgressPhotos from '../../components/ProgressPhotos';
+import CalendarView from '../../components/CalendarView';
 
 const ClientProfile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -17,6 +19,7 @@ const ClientProfile: React.FC = () => {
   const [workoutPlans, setWorkoutPlans] = useState<any[]>([]);
   const [trainerNotes, setTrainerNotes] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
+  const [paymentRecords, setPaymentRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Workout Plan Form State
@@ -29,34 +32,53 @@ const ClientProfile: React.FC = () => {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [noteContent, setNoteContent] = useState('');
 
+  // Payment Form State
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [paymentData, setPaymentData] = useState({ package: '', startDate: '', dueDate: '', status: 'Pending' });
+
   useEffect(() => {
+    let unsubscribeLogs: () => void;
+    let unsubscribePlans: () => void;
+    let unsubscribeNotes: () => void;
+    let unsubscribeAttendance: () => void;
+    let unsubscribePayments: () => void;
+
     const fetchAllData = async () => {
       if (!id) return;
 
       try {
         // Fetch current user
-        const currentUserData = await api.getMe();
+        const currentUserData = await firebaseService.getUser(auth.currentUser?.uid || '');
         setUserData(currentUserData);
 
         // Fetch client user doc
-        const clientData = await api.getUserById(id);
-        setClient(clientData);
+        const clientData = await firebaseService.getUser(id);
+        setClient(clientData as User);
 
         // Fetch workout logs
-        const logsData = await api.getWorkoutLogs(id);
-        setRecentLogs(logsData.slice(0, 5));
+        unsubscribeLogs = firebaseService.subscribeToWorkoutLogs((logsData) => {
+          setRecentLogs(logsData);
+        }, id);
 
         // Fetch workout plans
-        const plansData = await api.getWorkoutPlans(id);
-        setWorkoutPlans(plansData);
+        unsubscribePlans = firebaseService.subscribeToWorkoutPlans(id, (plansData) => {
+          setWorkoutPlans(plansData);
+        });
 
         // Fetch trainer notes
-        const notesData = await api.getTrainerNotes(id);
-        setTrainerNotes(notesData);
+        unsubscribeNotes = firebaseService.subscribeToTrainerNotes(id, (notesData) => {
+          setTrainerNotes(notesData);
+        });
 
         // Fetch attendance
-        const attendanceData = await api.getAttendance(id);
-        setAttendance(attendanceData);
+        unsubscribeAttendance = firebaseService.subscribeToAttendance(id, (attendanceData) => {
+          setAttendance(attendanceData);
+        });
+
+        // Fetch payments
+        unsubscribePayments = firebaseService.subscribeToPaymentRecords(id, (records) => {
+          setPaymentRecords(records);
+        });
         
       } catch (error) {
         console.error("Error fetching client profile:", error);
@@ -66,13 +88,21 @@ const ClientProfile: React.FC = () => {
     };
 
     fetchAllData();
+    
+    return () => {
+      if (unsubscribeLogs) unsubscribeLogs();
+      if (unsubscribePlans) unsubscribePlans();
+      if (unsubscribeNotes) unsubscribeNotes();
+      if (unsubscribeAttendance) unsubscribeAttendance();
+      if (unsubscribePayments) unsubscribePayments();
+    };
   }, [id]);
 
   const handleSaveNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id || !noteContent.trim() || !userData) return;
     try {
-      await api.saveTrainerNote({
+      await firebaseService.saveTrainerNote({
         id: editingNoteId,
         trainerId: userData.id,
         clientId: id,
@@ -82,8 +112,6 @@ const ClientProfile: React.FC = () => {
       setNoteContent('');
       setEditingNoteId(null);
       setShowNoteForm(false);
-      const notesData = await api.getTrainerNotes(id);
-      setTrainerNotes(notesData);
     } catch (error) {
       console.error("Error saving trainer note:", error);
       alert("Failed to save trainer note.");
@@ -93,9 +121,7 @@ const ClientProfile: React.FC = () => {
   const handleDeleteNote = async (noteId: string) => {
     if (!confirm("Are you sure you want to delete this note?")) return;
     try {
-      await api.deleteTrainerNote(noteId);
-      const notesData = await api.getTrainerNotes(id!);
-      setTrainerNotes(notesData);
+      await firebaseService.deleteTrainerNote(noteId);
     } catch (error) {
       console.error("Error deleting trainer note:", error);
       alert("Failed to delete trainer note.");
@@ -106,9 +132,7 @@ const ClientProfile: React.FC = () => {
     if (!id) return;
     try {
       const date = new Date().toISOString().split('T')[0];
-      await api.markAttendance({ clientId: id, date, status });
-      const attendanceData = await api.getAttendance(id);
-      setAttendance(attendanceData);
+      await firebaseService.markAttendance({ clientId: id, date, status });
     } catch (error) {
       console.error("Error marking attendance:", error);
       alert("Failed to mark attendance.");
@@ -118,9 +142,7 @@ const ClientProfile: React.FC = () => {
   const handleDeletePlan = async (planId: string) => {
     if (!confirm("Are you sure you want to delete this plan?")) return;
     try {
-      await api.deleteWorkoutPlan(planId);
-      const plansData = await api.getWorkoutPlans(id!);
-      setWorkoutPlans(plansData);
+      await firebaseService.deleteWorkoutPlan(planId);
     } catch (error) {
       console.error("Error deleting workout plan:", error);
       alert("Failed to delete workout plan.");
@@ -140,13 +162,7 @@ const ClientProfile: React.FC = () => {
         updatedAt: now
       };
       
-      const savedPlan = await api.saveWorkoutPlan(planData);
-      
-      if (editingPlanId) {
-        setWorkoutPlans(plans => plans.map(p => p.id === editingPlanId ? savedPlan : p));
-      } else {
-        setWorkoutPlans([savedPlan, ...workoutPlans]);
-      }
+      await firebaseService.saveWorkoutPlan(planData);
       
       setShowPlanForm(false);
       setEditingPlanId(null);
@@ -154,6 +170,24 @@ const ClientProfile: React.FC = () => {
     } catch (error) {
       console.error("Error saving workout plan:", error);
       alert("Failed to save workout plan.");
+    }
+  };
+
+  const handleSavePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id) return;
+
+    try {
+      await firebaseService.addPaymentRecord({
+        clientId: id,
+        ...paymentData
+      });
+      
+      setShowPaymentForm(false);
+      setPaymentData({ package: '', startDate: '', dueDate: '', status: 'Pending' });
+    } catch (error) {
+      console.error("Error saving payment record:", error);
+      alert("Failed to save payment record.");
     }
   };
 
@@ -296,7 +330,7 @@ const ClientProfile: React.FC = () => {
             </h3>
             {recentLogs.length > 0 ? (
               <div className="space-y-4 font-mono text-[10px] uppercase tracking-wider">
-                {recentLogs.map(log => (
+                {recentLogs.slice(0, 5).map(log => (
                   <div key={log.id} className="flex justify-between items-center border-b border-neutral-800/50 pb-2">
                     <span className="text-neutral-600">{new Date(log.date).toLocaleDateString()}</span>
                     <span className="text-emerald-500">{log.entries.length} Exercises</span>
@@ -371,6 +405,11 @@ const ClientProfile: React.FC = () => {
       {id && (
         <ProgressPhotos clientId={id} isTrainer={userData?.role === 'TRAINER'} />
       )}
+
+      {/* Calendar View */}
+      <div className="mb-10">
+        <CalendarView logs={recentLogs} notes={trainerNotes} attendance={attendance} />
+      </div>
 
       {/* Attendance Tracking */}
       <div className="bg-neutral-900/50 border border-neutral-800 rounded-[2.5rem] overflow-hidden mb-10 shadow-2xl">
@@ -536,6 +575,131 @@ const ClientProfile: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Payment Records Section */}
+      <div className="bg-neutral-900/50 border border-neutral-800 rounded-[2.5rem] overflow-hidden mb-10 shadow-2xl">
+        <div className="p-8 border-b border-neutral-800 flex justify-between items-center">
+          <div className="flex items-center space-x-3">
+            <CreditCard className="w-5 h-5 text-brand-red" />
+            <h3 className="text-2xl font-display italic uppercase tracking-wider">Payment Records</h3>
+          </div>
+          {userData?.role === 'TRAINER' && !showPaymentForm && (
+            <button 
+              onClick={() => setShowPaymentForm(true)}
+              className="bg-brand-red text-white px-6 py-2.5 rounded-2xl font-mono text-[10px] uppercase tracking-widest flex items-center space-x-2 hover:bg-red-700 transition-all shadow-[0_0_15px_rgba(255,0,0,0.3)]"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Record</span>
+            </button>
+          )}
+        </div>
+
+        {showPaymentForm && userData?.role === 'TRAINER' && (
+          <div className="p-8 border-b border-neutral-800 bg-neutral-800/30">
+            <form onSubmit={handleSavePayment} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2 ml-1">Package Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={paymentData.package}
+                    onChange={(e) => setPaymentData({ ...paymentData, package: e.target.value })}
+                    className="input-field font-mono text-xs"
+                    placeholder="e.g. 12 Weeks Transformation"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2 ml-1">Status</label>
+                  <select
+                    value={paymentData.status}
+                    onChange={(e) => setPaymentData({ ...paymentData, status: e.target.value as any })}
+                    className="input-field font-mono text-xs"
+                  >
+                    <option value="Paid">Paid</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Overdue">Overdue</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2 ml-1">Start Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={paymentData.startDate}
+                    onChange={(e) => setPaymentData({ ...paymentData, startDate: e.target.value })}
+                    className="input-field font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2 ml-1">Due Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={paymentData.dueDate}
+                    onChange={(e) => setPaymentData({ ...paymentData, dueDate: e.target.value })}
+                    className="input-field font-mono text-xs"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end space-x-4">
+                <button 
+                  type="button"
+                  onClick={() => setShowPaymentForm(false)}
+                  className="px-6 py-3 rounded-2xl font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:bg-neutral-800 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="bg-white text-black px-8 py-3 rounded-2xl font-mono text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-200 transition-all"
+                >
+                  Save Record
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        <div className="p-8">
+          {paymentRecords.length === 0 && !showPaymentForm ? (
+            <div className="p-12 text-center border border-dashed border-neutral-800 rounded-3xl">
+              <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-600 italic">No payment records found.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {paymentRecords.map(record => (
+                <div key={record.id} className="bg-neutral-900/50 border border-neutral-800 p-6 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h4 className="text-white font-bold text-lg">{record.package}</h4>
+                    <div className="flex space-x-4 mt-2">
+                      <p className="text-[10px] font-mono text-neutral-500 uppercase">Start: {new Date(record.startDate).toLocaleDateString()}</p>
+                      <p className="text-[10px] font-mono text-neutral-500 uppercase">Due: {new Date(record.dueDate).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <div className={`px-4 py-2 rounded-full text-[10px] font-mono uppercase font-bold tracking-widest ${
+                      record.status === 'Paid' ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-800/50' : 
+                      record.status === 'Overdue' ? 'bg-brand-red/20 text-brand-red border border-brand-red/30' : 
+                      'bg-yellow-900/50 text-yellow-500 border border-yellow-800/50'
+                    }`}>
+                      {record.status}
+                    </div>
+                    {userData?.role === 'TRAINER' && record.status !== 'Paid' && (
+                      <button 
+                        onClick={() => firebaseService.updatePaymentRecord(record.id, { status: 'Paid' })}
+                        className="btn-primary text-[10px] px-4 py-2"
+                      >
+                        Mark Paid
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

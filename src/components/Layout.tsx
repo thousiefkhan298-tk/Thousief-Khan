@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { api } from '../lib/api';
+import { firebaseService } from '../services/firebaseService';
 import { LogOut, User as UserIcon, Activity, Calendar, Settings, ClipboardList, MessageSquare, Zap } from 'lucide-react';
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -15,38 +17,56 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    const fetchUnread = async () => {
-      try {
-        const messages = await api.getUnreadMessages();
-        setUnreadCount(messages.length);
-      } catch (error) {
-        console.error("Error fetching unread messages:", error);
-      }
-    };
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!userData?.uid) return;
+
+    const unsubscribe = firebaseService.subscribeToMessages(userData.uid, (messages) => {
+      const unread = messages.filter(m => m.receiverId === userData.uid && !m.read);
+      setUnreadCount(unread.length);
+    });
+
+    return () => unsubscribe();
+  }, [userData?.uid]);
 
   const handleLogout = async () => {
-    api.logout();
-    navigate('/login');
+    try {
+      await signOut(auth);
+      navigate('/login');
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
   };
+
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = [
     { name: 'Overview', path: '/dashboard', icon: Activity },
     { name: 'Workout Logs', path: '/workout-logs', icon: ClipboardList },
     { name: 'Messages', path: '/messages', icon: MessageSquare },
-    { name: 'Schedule', path: '#', icon: Calendar },
+    { name: 'Schedule', path: '/schedule', icon: Calendar },
     { name: 'Profile', path: '#', icon: UserIcon },
     { name: 'Settings', path: '#', icon: Settings },
   ];
 
   return (
-    <div className="min-h-screen bg-brand-dark flex">
+    <div className="min-h-screen bg-brand-dark flex flex-col md:flex-row">
+      {/* Mobile Header */}
+      <div className="md:hidden flex items-center justify-between p-4 border-b border-neutral-800 bg-neutral-900">
+        <button onClick={() => navigate(-1)} className="text-neutral-500">Back</button>
+        <div className="speedfit-logo text-xl">
+          <Zap className="w-5 h-5 text-brand-red mr-2 fill-current" />
+          SPEED<span>FIT</span>
+        </div>
+        <div className="flex items-center space-x-4">
+          <button onClick={handleLogout} className="text-neutral-500">Logout</button>
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-white">
+            {isMobileMenuOpen ? 'Close' : 'Menu'}
+          </button>
+        </div>
+      </div>
+
       {/* Sidebar */}
-      <aside className="w-72 bg-neutral-900 border-r border-neutral-800 flex flex-col z-20">
-        <div className="p-8 border-b border-neutral-800">
+      <aside className={`${isMobileMenuOpen ? 'flex' : 'hidden'} md:flex w-full md:w-72 bg-neutral-900 border-r border-neutral-800 flex-col z-20`}>
+        <div className="p-8 border-b border-neutral-800 hidden md:block">
           <div className="speedfit-logo text-2xl">
             <Zap className="w-6 h-6 text-brand-red mr-2 fill-current" />
             SPEED<span>FIT</span>
@@ -62,6 +82,7 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
               <Link
                 key={item.name}
                 to={item.path}
+                onClick={() => setIsMobileMenuOpen(false)}
                 className={`flex items-center space-x-4 px-5 py-4 rounded-2xl font-mono text-[10px] uppercase tracking-widest transition-all group ${
                   isActive
                     ? 'bg-brand-red text-white shadow-[0_0_20px_rgba(255,0,0,0.2)]'
@@ -102,7 +123,7 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-10 overflow-y-auto custom-scrollbar relative">
+      <main className="flex-1 p-4 md:p-10 overflow-y-auto custom-scrollbar relative">
         {/* Background Grid Effect */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none"></div>
         <div className="relative z-10">

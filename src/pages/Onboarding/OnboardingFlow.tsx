@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../../lib/api';
+import { firebaseService } from '../../services/firebaseService';
 import { ClientDetails, HealthAssessment } from '../../types';
 import Step1Details from './Step1Details';
 import Step2Health from './Step2Health';
@@ -56,7 +56,7 @@ const OnboardingFlow: React.FC<Props> = ({ user, userData }) => {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      await api.submitOnboarding({
+      await firebaseService.submitOnboarding(user.uid, {
         clientDetails,
         healthAssessment: {
           ...healthAssessment,

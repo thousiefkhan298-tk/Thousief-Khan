@@ -111,6 +111,13 @@ export interface SessionRequest {
   createdAt: string;
 }
 
+export interface UpcomingSession {
+  id: string;
+  clientId: string;
+  date: string;
+  status: 'Pending' | 'Confirmed';
+}
+
 export interface PaymentRecord {
   id: string;
   clientId: string;

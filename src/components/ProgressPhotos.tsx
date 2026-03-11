@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../lib/api';
+import { firebaseService } from '../services/firebaseService';
 import { ProgressPhoto } from '../types';
 import { Camera, Plus, Trash2 } from 'lucide-react';
 
@@ -15,27 +15,20 @@ const ProgressPhotos: React.FC<Props> = ({ clientId, isTrainer }) => {
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
-    const fetchPhotos = async () => {
-      try {
-        const data = await api.getProgressPhotos(clientId);
-        setPhotos(data);
-      } catch (error) {
-        console.error("Error fetching progress photos:", error);
-      }
-    };
-    fetchPhotos();
+    const unsubscribe = firebaseService.subscribeToProgressPhotos(clientId, (photosData) => {
+      setPhotos(photosData);
+    });
+    return () => unsubscribe();
   }, [clientId]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!imageUrl.trim()) return;
     try {
-      await api.saveProgressPhoto({ clientId, imageUrl, notes, date: new Date().toISOString() });
+      await firebaseService.saveProgressPhoto({ clientId, imageUrl, notes, date: new Date().toISOString() });
       setImageUrl('');
       setNotes('');
       setShowForm(false);
-      const data = await api.getProgressPhotos(clientId);
-      setPhotos(data);
     } catch (error) {
       console.error("Error saving photo:", error);
       alert("Failed to save photo.");
@@ -45,9 +38,7 @@ const ProgressPhotos: React.FC<Props> = ({ clientId, isTrainer }) => {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this photo?")) return;
     try {
-      await api.deleteProgressPhoto(id);
-      const data = await api.getProgressPhotos(clientId);
-      setPhotos(data);
+      await firebaseService.deleteProgressPhoto(id);
     } catch (error) {
       console.error("Error deleting photo:", error);
       alert("Failed to delete photo.");

@@ -1,35 +1,106 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, Target, Calendar, Zap, Shield, ChevronRight } from 'lucide-react';
-import { api } from '../../lib/api';
-import { WorkoutLog } from '../../types';
-import { Link } from 'react-router-dom';
+import { Activity, Target, Calendar, Zap, Shield, ChevronRight, ArrowLeft, LogOut, CheckCircle, CreditCard, Utensils, FileText } from 'lucide-react';
+import { firebaseService } from '../../services/firebaseService';
+import { auth } from '../../firebase';
+import { WorkoutLog, UpcomingSession, DietPlan, PaymentRecord, WorkoutPlan } from '../../types';
+import { Link, useNavigate } from 'react-router-dom';
+import { signOut } from 'firebase/auth';
 
 interface Props {
   userData: any;
 }
 
 const ClientDashboard: React.FC<Props> = ({ userData }) => {
+  const navigate = useNavigate();
   const [recentLogs, setRecentLogs] = useState<WorkoutLog[]>([]);
+  const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([]);
+  const [paymentRecords, setPaymentRecords] = useState<PaymentRecord[]>([]);
+  const [attendance, setAttendance] = useState<any[]>([]);
+  const [rescheduleRequests, setRescheduleRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showRescheduleForm, setShowRescheduleForm] = useState(false);
+  const [rescheduleData, setRescheduleData] = useState({ originalDate: '', requestedDate: '', reason: '' });
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const logs = await api.getWorkoutLogs();
-        setRecentLogs(logs);
-        setLoading(false);
-      } catch (error) {
-        console.error("Error fetching client data:", error);
-      }
-    };
+    if (!userData?.uid) return;
 
-    fetchData();
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
-  }, []);
+    const unsubscribeLogs = firebaseService.subscribeToWorkoutLogs((logs) => {
+      setRecentLogs(logs);
+    }, userData.uid);
+
+    const unsubscribePlans = firebaseService.subscribeToWorkoutPlans(userData.uid, (plans) => {
+      setWorkoutPlans(plans);
+    });
+
+    const unsubscribePayments = firebaseService.subscribeToPaymentRecords(userData.uid, (records) => {
+      setPaymentRecords(records);
+    });
+
+    const unsubscribeAttendance = firebaseService.subscribeToAttendance(userData.uid, (records) => {
+      setAttendance(records);
+    });
+
+    const unsubscribeRequests = firebaseService.subscribeToRescheduleRequests((requests) => {
+      setRescheduleRequests(requests.filter(r => r.clientId === userData.uid));
+    });
+
+    setLoading(false);
+
+    return () => {
+      unsubscribeLogs();
+      unsubscribePlans();
+      unsubscribePayments();
+      unsubscribeAttendance();
+      unsubscribeRequests();
+    };
+  }, [userData?.uid]);
+
+  const handleRequestReschedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await firebaseService.requestReschedule({ ...rescheduleData, clientId: userData.uid, status: 'PENDING' });
+      setShowRescheduleForm(false);
+      setRescheduleData({ originalDate: '', requestedDate: '', reason: '' });
+      alert('Reschedule request submitted!');
+    } catch (error) {
+      console.error("Error requesting reschedule:", error);
+      alert('Failed to submit reschedule request.');
+    }
+  };
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    navigate('/login');
+  };
 
   return (
     <div className="space-y-10">
+      {/* Back and Logout Buttons */}
+      <div className="flex justify-between items-center mb-6">
+        <button onClick={() => navigate(-1)} className="flex items-center text-neutral-500 hover:text-white">
+          <ArrowLeft className="w-4 h-4 mr-2" /> Back
+        </button>
+        <button onClick={handleLogout} className="flex items-center text-neutral-500 hover:text-white">
+          <LogOut className="w-4 h-4 mr-2" /> Logout
+        </button>
+      </div>
+
+      {/* Reschedule Modal */}
+      {showRescheduleForm && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6">
+          <form onSubmit={handleRequestReschedule} className="bg-neutral-900 border border-neutral-800 p-8 rounded-3xl w-full max-w-md space-y-4">
+            <h3 className="text-xl font-display italic uppercase text-white">Request Reschedule</h3>
+            <input type="date" className="input-field" value={rescheduleData.originalDate} onChange={e => setRescheduleData({...rescheduleData, originalDate: e.target.value})} required />
+            <input type="date" className="input-field" value={rescheduleData.requestedDate} onChange={e => setRescheduleData({...rescheduleData, requestedDate: e.target.value})} required />
+            <textarea placeholder="Reason" className="input-field" value={rescheduleData.reason} onChange={e => setRescheduleData({...rescheduleData, reason: e.target.value})} required />
+            <div className="flex space-x-4">
+              <button type="button" onClick={() => setShowRescheduleForm(false)} className="btn-secondary">Cancel</button>
+              <button type="submit" className="btn-primary">Submit</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <div className="flex items-center space-x-3 mb-2">
@@ -44,6 +115,7 @@ const ClientDashboard: React.FC<Props> = ({ userData }) => {
           </p>
         </div>
         <div className="flex items-center space-x-4">
+          <button onClick={() => setShowRescheduleForm(true)} className="btn-primary">Request Reschedule</button>
           <div className="text-right">
             <p className="text-[8px] font-mono text-neutral-500 uppercase tracking-widest">Current Phase</p>
             <p className="text-xl font-mono text-white">PHASE 01: INITIALIZATION</p>
@@ -55,7 +127,7 @@ const ClientDashboard: React.FC<Props> = ({ userData }) => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
           { label: 'Current Role', value: userData?.role || 'CLIENT', icon: Shield, color: 'brand-red' },
-          { label: 'Next Deployment', value: 'TOMORROW 09:00', icon: Calendar, color: 'brand-red' },
+          { label: 'Total Sessions', value: attendance.length, icon: Calendar, color: 'brand-red' },
           { label: 'Active Objectives', value: '03', icon: Target, color: 'brand-red' },
         ].map((stat, idx) => (
           <div key={idx} className="bg-neutral-900/50 border border-neutral-800 p-6 rounded-3xl relative overflow-hidden group hover:border-brand-red/50 transition-colors">
@@ -111,18 +183,92 @@ const ClientDashboard: React.FC<Props> = ({ userData }) => {
 
         <div className="space-y-6">
           <div className="flex items-center space-x-3">
-            <Target className="w-4 h-4 text-brand-red" />
-            <h3 className="text-xl font-display italic uppercase tracking-wider">Mission Intel</h3>
+            <Calendar className="w-4 h-4 text-brand-red" />
+            <h3 className="text-xl font-display italic uppercase tracking-wider">Attendance</h3>
+          </div>
+          <div className="space-y-4">
+            {attendance.length === 0 ? (
+              <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-600 italic">No attendance records.</p>
+            ) : (
+              attendance.slice(0, 5).map(record => (
+                <div key={record.id} className="bg-neutral-900/50 border border-neutral-800 p-6 rounded-3xl flex items-center justify-between">
+                  <div>
+                    <p className="text-white font-bold">{record.date}</p>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-[10px] font-mono uppercase ${record.status === 'ATTENDED' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-brand-red/20 text-brand-red'}`}>
+                    {record.status}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="flex items-center space-x-3 pt-6">
+            <Calendar className="w-4 h-4 text-brand-red" />
+            <h3 className="text-xl font-display italic uppercase tracking-wider">Reschedule Requests</h3>
+          </div>
+          <div className="space-y-4">
+            {rescheduleRequests.length === 0 ? (
+              <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-600 italic">No reschedule requests.</p>
+            ) : (
+              rescheduleRequests.map(req => (
+                <div key={req.id} className="bg-neutral-900/50 border border-neutral-800 p-6 rounded-3xl flex flex-col space-y-2">
+                  <p className="text-white font-bold">{req.reason}</p>
+                  <p className="text-[10px] font-mono text-neutral-500">{new Date(req.originalDate).toLocaleDateString()} to {new Date(req.requestedDate).toLocaleDateString()}</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-mono uppercase ${req.status === 'APPROVED' ? 'bg-emerald-900/50 text-emerald-400' : req.status === 'REJECTED' ? 'bg-brand-red/20 text-brand-red' : 'bg-neutral-800 text-neutral-400'}`}>
+                      {req.status}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Protocols and Payment Sections */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3">
+            <FileText className="w-4 h-4 text-brand-red" />
+            <h3 className="text-xl font-display italic uppercase tracking-wider">Training Protocol</h3>
           </div>
           <div className="bg-neutral-900/50 border border-neutral-800 p-8 rounded-[2rem]">
-            <p className="text-[10px] font-mono text-neutral-500 uppercase leading-relaxed">
-              Your training protocols are being finalized by your lead trainer. Stay tuned for deployment orders.
-            </p>
-            <div className="mt-6 pt-6 border-t border-neutral-800">
-              <button className="w-full py-3 bg-neutral-800 text-neutral-400 font-mono text-[10px] uppercase tracking-widest rounded-xl hover:bg-neutral-700 transition-colors">
-                View Full Dossier
-              </button>
-            </div>
+            {workoutPlans.length > 0 ? (
+              <div>
+                <p className="text-[10px] font-mono text-brand-red uppercase tracking-widest mb-4">
+                  Updated: {new Date(workoutPlans[0].updatedAt).toLocaleDateString()}
+                </p>
+                <p className="text-neutral-300 font-mono text-sm leading-relaxed whitespace-pre-wrap">{workoutPlans[0].plan}</p>
+              </div>
+            ) : (
+              <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-600 italic">No training protocol assigned.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3">
+            <CreditCard className="w-4 h-4 text-brand-red" />
+            <h3 className="text-xl font-display italic uppercase tracking-wider">Payment Records</h3>
+          </div>
+          <div className="space-y-4">
+            {paymentRecords.length === 0 ? (
+              <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-600 italic">No payment records found.</p>
+            ) : (
+              paymentRecords.map(record => (
+                <div key={record.id} className="bg-neutral-900/50 border border-neutral-800 p-6 rounded-3xl flex items-center justify-between">
+                  <div>
+                    <p className="text-white font-bold">{record.package}</p>
+                    <p className="text-[10px] font-mono text-neutral-500 uppercase">Due: {new Date(record.dueDate).toLocaleDateString()}</p>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-[10px] font-mono uppercase ${record.status === 'Paid' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-brand-red/20 text-brand-red'}`}>
+                    {record.status}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
