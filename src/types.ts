@@ -26,6 +26,13 @@ export interface ClientDetails {
   emergencyContact: string;
 }
 
+export interface ConcernForm {
+  primaryConcern: string;
+  secondaryConcern: string;
+  expectations: string;
+  limitations: string;
+}
+
 export interface HealthAssessment {
   conditions: string[];
   otherConditions: string;
@@ -47,6 +54,18 @@ export interface HealthAssessment {
   painActivities: string[];
   medications: string;
   confirmed: boolean;
+  consentGiven: boolean;
+  consentDate?: string;
+  healthConcerns?: string;
+}
+
+export interface ScheduledWorkout {
+  id: string;
+  clientId: string;
+  date: string;
+  entries: WorkoutLogEntry[];
+  notes?: string;
+  status: 'SCHEDULED' | 'COMPLETED';
 }
 
 export interface FitnessAssessment {
@@ -80,10 +99,15 @@ export interface FavoriteExercise {
   defaultReps: string;
 }
 
+export interface WorkoutPlanSection {
+  title: string;
+  content: string;
+}
+
 export interface WorkoutPlan {
   id: string;
   clientId: string;
-  plan: string;
+  sections: WorkoutPlanSection[];
   updatedAt: string;
 }
 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../../firebase';
+import { auth, db, handleFirestoreError, OperationType } from '../../firebase';
 import { ArrowRight, Zap } from 'lucide-react';
 
 const SignupPage: React.FC = () => {
@@ -25,21 +25,43 @@ const SignupPage: React.FC = () => {
       const role = isTrainer ? 'TRAINER' : 'CLIENT';
       
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = userCredential.user.uid;
+      const path = `users/${uid}`;
       
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        uid: userCredential.user.uid,
-        email,
-        name,
-        role,
-        onboardingCompleted: role === 'TRAINER',
-        createdAt: new Date().toISOString()
-      });
+      try {
+        await setDoc(doc(db, 'users', uid), {
+          uid: uid,
+          email,
+          name,
+          role,
+          onboardingCompleted: role === 'TRAINER',
+          createdAt: new Date().toISOString()
+        });
+      } catch (firestoreErr: any) {
+        console.error("Firestore error during signup:", firestoreErr);
+        handleFirestoreError(firestoreErr, OperationType.CREATE, path);
+      }
 
       navigate('/dashboard');
     } catch (err: any) {
+      console.error("Signup error:", err);
       if (err.code === 'auth/operation-not-allowed') {
         setError('Email/Password signup is not enabled. Please enable it in the Firebase Console under Authentication > Sign-in method.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError('This domain is not authorized for Firebase Authentication. Please add this domain to the "Authorized domains" list in the Firebase Console (Authentication > Settings).');
+      } else if (err.code === 'auth/email-already-in-use') {
+        setError('This email is already registered. Please login instead.');
       } else {
+        // Check if it's our custom JSON error from handleFirestoreError
+        try {
+          const parsed = JSON.parse(err.message);
+          if (parsed.error && parsed.operationType) {
+            setError(`Database Error: ${parsed.error} during ${parsed.operationType} on ${parsed.path}`);
+            return;
+          }
+        } catch (e) {
+          // Not a JSON error
+        }
         setError(err.message || 'Failed to sign up');
       }
     } finally {
@@ -59,22 +81,52 @@ const SignupPage: React.FC = () => {
       const role = isTrainer ? 'TRAINER' : 'CLIENT';
       
       // Check if user exists
-      const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+      const uid = result.user.uid;
+      const path = `users/${uid}`;
+      let userDoc;
+      try {
+        userDoc = await getDoc(doc(db, 'users', uid));
+      } catch (firestoreErr: any) {
+        console.error("Firestore error during Google signup:", firestoreErr);
+        handleFirestoreError(firestoreErr, OperationType.GET, path);
+      }
       
-      if (!userDoc.exists()) {
-        await setDoc(doc(db, 'users', result.user.uid), {
-          uid: result.user.uid,
-          email: userEmail,
-          name: result.user.displayName || '',
-          role,
-          onboardingCompleted: role === 'TRAINER',
-          createdAt: new Date().toISOString()
-        });
+      if (userDoc && !userDoc.exists()) {
+        try {
+          await setDoc(doc(db, 'users', uid), {
+            uid: uid,
+            email: userEmail,
+            name: result.user.displayName || '',
+            role,
+            onboardingCompleted: role === 'TRAINER',
+            createdAt: new Date().toISOString()
+          });
+        } catch (setErr: any) {
+          console.error("Firestore error creating user doc during Google signup:", setErr);
+          handleFirestoreError(setErr, OperationType.CREATE, path);
+        }
       }
 
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Failed to sign up with Google');
+      console.error("Google Signup error:", err);
+      if (err.code === 'auth/unauthorized-domain') {
+        setError('This domain is not authorized for Google Sign-in. Please add this domain to the "Authorized domains" list in the Firebase Console (Authentication > Settings).');
+      } else if (err.code === 'auth/popup-blocked') {
+        setError('The sign-in popup was blocked by your browser. Please allow popups for this site.');
+      } else {
+        // Check if it's our custom JSON error from handleFirestoreError
+        try {
+          const parsed = JSON.parse(err.message);
+          if (parsed.error && parsed.operationType) {
+            setError(`Database Error: ${parsed.error} during ${parsed.operationType} on ${parsed.path}`);
+            return;
+          }
+        } catch (e) {
+          // Not a JSON error
+        }
+        setError(err.message || 'Failed to sign up with Google');
+      }
     } finally {
       setLoading(false);
     }
@@ -104,7 +156,7 @@ const SignupPage: React.FC = () => {
             <h1 className="text-5xl font-display italic uppercase leading-[1.1] mb-2 text-white">
               Join <span className="text-brand-red">Now</span>
             </h1>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-400">New Recruit Registration</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-400">New Client Registration</p>
           </div>
 
           {error && (

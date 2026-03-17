@@ -110,13 +110,13 @@ const Messages: React.FC = () => {
       <div className="mb-12">
         <div className="flex items-center space-x-3 mb-2">
           <MessageSquare className="w-4 h-4 text-brand-red" />
-          <p className="text-[10px] font-mono uppercase tracking-[0.4em] text-brand-red">Secure Comms</p>
+          <p className="text-[10px] font-mono uppercase tracking-[0.4em] text-brand-red">Messages</p>
         </div>
         <h2 className="text-6xl font-display italic uppercase leading-none">
-          Intel <span className="text-brand-red">Feed</span>
+          Message <span className="text-brand-red">Feed</span>
         </h2>
         <p className="text-neutral-500 font-mono text-[10px] uppercase tracking-widest mt-4">
-          Encrypted communication channel with {userData?.role === 'TRAINER' ? 'recruits' : 'commanders'}.
+          Direct communication channel with {userData?.role === 'TRAINER' ? 'clients' : 'trainers'}.
         </p>
       </div>
 

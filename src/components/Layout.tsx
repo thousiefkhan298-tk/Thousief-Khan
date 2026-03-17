@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { firebaseService } from '../services/firebaseService';
-import { LogOut, User as UserIcon, Activity, Calendar, Settings, ClipboardList, MessageSquare, Zap } from 'lucide-react';
+import { LogOut, User as UserIcon, Activity, Calendar, Settings, ClipboardList, MessageSquare, Zap, ArrowLeft } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 
@@ -43,25 +43,28 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
     { name: 'Workout Logs', path: '/workout-logs', icon: ClipboardList },
     { name: 'Messages', path: '/messages', icon: MessageSquare },
     { name: 'Schedule', path: '/schedule', icon: Calendar },
-    { name: 'Profile', path: '#', icon: UserIcon },
-    { name: 'Settings', path: '#', icon: Settings },
+    { name: 'Profile', path: '/profile', icon: UserIcon },
+    { name: 'Settings', path: '/settings', icon: Settings },
   ];
 
   return (
     <div className="min-h-screen bg-brand-dark flex flex-col md:flex-row">
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-4 border-b border-neutral-800 bg-neutral-900">
-        <button onClick={() => navigate(-1)} className="text-neutral-500">Back</button>
+        <button 
+          onClick={() => navigate(-1)} 
+          className="flex items-center space-x-2 text-neutral-500 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span className="font-mono text-[10px] uppercase tracking-widest">Back</span>
+        </button>
         <div className="speedfit-logo text-xl">
           <Zap className="w-5 h-5 text-brand-red mr-2 fill-current" />
           SPEED<span>FIT</span>
         </div>
-        <div className="flex items-center space-x-4">
-          <button onClick={handleLogout} className="text-neutral-500">Logout</button>
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-white">
-            {isMobileMenuOpen ? 'Close' : 'Menu'}
-          </button>
-        </div>
+        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-white">
+          {isMobileMenuOpen ? 'Close' : 'Menu'}
+        </button>
       </div>
 
       {/* Sidebar */}
@@ -71,10 +74,18 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
             <Zap className="w-6 h-6 text-brand-red mr-2 fill-current" />
             SPEED<span>FIT</span>
           </div>
-          <p className="text-[8px] font-mono uppercase tracking-[0.3em] text-neutral-400 mt-1">BUILD TO TRANSFORMATION</p>
+          <p className="text-[8px] font-mono uppercase tracking-[0.3em] text-neutral-400 mt-1">CLIENT PORTAL</p>
         </div>
         
         <nav className="flex-1 p-6 space-y-3">
+          <button 
+            onClick={() => navigate(-1)}
+            className="flex items-center space-x-4 px-5 py-4 w-full text-neutral-500 hover:bg-neutral-800 hover:text-white rounded-2xl font-mono text-[10px] uppercase tracking-widest transition-all group mb-4"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            <span>Go Back</span>
+          </button>
+
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
@@ -106,8 +117,8 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
                 {userData?.name?.[0]?.toUpperCase() || 'A'}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-white truncate uppercase tracking-wider">{userData?.name || 'Athlete'}</p>
-                <p className="text-[8px] font-mono text-neutral-500 truncate uppercase">{userData?.role || 'Recruit'}</p>
+                <p className="text-[10px] font-bold text-white truncate uppercase tracking-wider">{userData?.name || 'User'}</p>
+                <p className="text-[8px] font-mono text-neutral-500 truncate uppercase">{userData?.role || 'Client'}</p>
               </div>
             </div>
           </div>
@@ -117,7 +128,7 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
             className="flex items-center space-x-4 px-5 py-4 w-full text-neutral-500 hover:bg-red-950/30 hover:text-brand-red rounded-2xl font-mono text-[10px] uppercase tracking-widest transition-all group"
           >
             <LogOut className="w-4 h-4 group-hover:rotate-12 transition-transform" />
-            <span>Terminate Session</span>
+            <span>Sign Out</span>
           </button>
         </div>
       </aside>
@@ -126,7 +137,16 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
       <main className="flex-1 p-4 md:p-10 overflow-y-auto custom-scrollbar relative">
         {/* Background Grid Effect */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none"></div>
+        
         <div className="relative z-10">
+          <button 
+            onClick={() => navigate(-1)}
+            className="hidden md:flex items-center space-x-2 text-neutral-500 hover:text-brand-red transition-colors mb-8 group"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            <span className="font-mono text-[10px] uppercase tracking-widest">Go Back</span>
+          </button>
+          
           {children}
         </div>
       </main>

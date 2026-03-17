@@ -63,7 +63,7 @@ const Step2Health: React.FC<Props> = ({ assessment, onChange, onNext, onBack }) 
                 {assessment.smoking && <div className="w-full h-full flex items-center justify-center text-white text-xs">✓</div>}
               </div>
             </div>
-            <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">Tobacco Consumption Protocol</span>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">Tobacco Consumption</span>
           </label>
           <label className="flex items-center space-x-4 cursor-pointer group">
             <div className="relative">

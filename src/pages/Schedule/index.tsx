@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../../components/Layout';
 import { firebaseService } from '../../services/firebaseService';
 import { User, UpcomingSession } from '../../types';
-import { Calendar, Clock, Plus, User as UserIcon } from 'lucide-react';
+import { Calendar, Clock, Plus, User as UserIcon, Check, AlertCircle } from 'lucide-react';
 
 interface Props {
   user: any;
@@ -63,11 +63,26 @@ const Schedule: React.FC<Props> = ({ user }) => {
     }
   };
 
-  const handleConfirm = async (id: string) => {
+  const handleConfirm = async (session: UpcomingSession) => {
     try {
-      await firebaseService.confirmSession(id, { status: 'Confirmed' });
+      await firebaseService.confirmSession(session.id, { status: 'Confirmed' });
+      
+      // Simulate sending a notification by adding a message or just a log
+      console.log(`Notification sent to client ${session.clientId}: Session on ${new Date(session.date).toLocaleString()} confirmed.`);
+      
+      // Optional: Send an actual message in the system
+      await firebaseService.sendMessage({
+        senderId: user.uid,
+        receiverId: session.clientId,
+        content: `Session Confirmed: Your training session for ${new Date(session.date).toLocaleDateString()} at ${new Date(session.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} has been approved. See you at the facility.`,
+        timestamp: new Date().toISOString(),
+        read: false
+      });
+      
+      alert("Session confirmed and client notified.");
     } catch (error) {
       console.error("Error confirming session:", error);
+      alert("Failed to confirm session.");
     }
   };
 
@@ -119,7 +134,11 @@ const Schedule: React.FC<Props> = ({ user }) => {
                     <div>
                       <div className="flex items-center space-x-2">
                         <p className="text-white font-bold text-lg">{sessionDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</p>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono uppercase ${session.status === 'Confirmed' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-brand-red/20 text-brand-red'}`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-mono uppercase tracking-widest ${
+                          session.status === 'Confirmed' 
+                            ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                            : 'bg-brand-red/10 text-brand-red border border-brand-red/20 animate-pulse'
+                        }`}>
                           {session.status}
                         </span>
                       </div>
@@ -139,8 +158,12 @@ const Schedule: React.FC<Props> = ({ user }) => {
                   </div>
                   
                   {isTrainer && session.status === 'Pending' && (
-                    <button onClick={() => handleConfirm(session.id)} className="btn-secondary text-xs py-2">
-                      Confirm Session
+                    <button 
+                      onClick={() => handleConfirm(session)} 
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-mono text-[10px] uppercase tracking-widest flex items-center space-x-2 transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+                    >
+                      <Check className="w-3 h-3" />
+                      <span>Confirm Session</span>
                     </button>
                   )}
                 </div>

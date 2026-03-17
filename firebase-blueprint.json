@@ -8,15 +8,47 @@
         "uid": { "type": "string", "description": "Firebase Auth UID" },
         "email": { "type": "string", "format": "email", "description": "User email" },
         "name": { "type": "string", "description": "User name" },
+        "role": { "type": "string", "enum": ["TRAINER", "CLIENT"] },
         "createdAt": { "type": "string", "format": "date", "description": "Account creation date" }
       },
       "required": ["uid", "email"]
+    },
+    "WorkoutLog": {
+      "title": "WorkoutLog",
+      "description": "Historical workout record",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "entries": { "type": "array" },
+        "notes": { "type": "string" }
+      }
+    },
+    "ScheduledWorkout": {
+      "title": "ScheduledWorkout",
+      "description": "Future scheduled workout",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "entries": { "type": "array" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["SCHEDULED", "COMPLETED", "CANCELLED"] }
+      }
     }
   },
   "firestore": {
     "/users/{uid}": {
       "schema": { "$ref": "User" },
       "description": "User profile documents"
+    },
+    "/workoutLogs/{docId}": {
+      "schema": { "$ref": "WorkoutLog" },
+      "description": "Workout logs"
+    },
+    "/scheduledWorkouts/{docId}": {
+      "schema": { "$ref": "ScheduledWorkout" },
+      "description": "Scheduled workouts"
     }
   }
 }

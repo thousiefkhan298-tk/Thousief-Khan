@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword } from 'firebase/auth';
-import { auth, db } from '../../firebase';
+import { auth, db, handleFirestoreError, OperationType } from '../../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ArrowRight, Zap } from 'lucide-react';
+import QRCodeDisplay from '../../components/QRCodeDisplay';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -23,6 +24,8 @@ const LoginPage: React.FC = () => {
       console.error("Login error:", err);
       if (err.code === 'auth/operation-not-allowed') {
         setError('Email/Password login is not enabled. Please enable it in the Firebase Console under Authentication > Sign-in method.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError('This domain is not authorized for Firebase Authentication. Please add this domain to the "Authorized domains" list in the Firebase Console (Authentication > Settings).');
       } else {
         setError(err.message || 'Failed to login');
       }
@@ -61,8 +64,14 @@ const LoginPage: React.FC = () => {
 
       navigate('/dashboard');
     } catch (err: any) {
-      console.error("Login error:", err);
-      setError(err.message || 'Failed to login with Google');
+      console.error("Google Login error:", err);
+      if (err.code === 'auth/unauthorized-domain') {
+        setError('This domain is not authorized for Google Sign-in. Please add this domain to the "Authorized domains" list in the Firebase Console (Authentication > Settings).');
+      } else if (err.code === 'auth/popup-blocked') {
+        setError('The sign-in popup was blocked by your browser. Please allow popups for this site.');
+      } else {
+        setError(err.message || 'Failed to login with Google');
+      }
     } finally {
       setLoading(false);
     }
@@ -160,11 +169,15 @@ const LoginPage: React.FC = () => {
 
           <div className="mt-10 pt-8 border-t border-neutral-800 text-center">
             <p className="text-neutral-500 text-xs font-mono uppercase tracking-wider">
-              New Recruit?{' '}
+              New Client?{' '}
               <Link to="/signup" className="text-brand-red font-bold hover:text-red-400 transition-colors">
                 Join the Ranks
               </Link>
             </p>
+            <div className="mt-8 flex flex-col items-center">
+              <p className="text-neutral-500 text-[10px] font-mono uppercase tracking-widest mb-4">Scan to Download App</p>
+              <QRCodeDisplay url={window.location.origin} />
+            </div>
           </div>
         </div>
       </div>

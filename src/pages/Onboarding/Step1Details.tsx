@@ -46,7 +46,7 @@ const Step1Details: React.FC<Props> = ({ details, onChange, onNext }) => {
           </select>
         </div>
         <div className="space-y-2">
-          <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 ml-1">Comms (Phone)</label>
+          <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 ml-1">Phone Number</label>
           <input required type="tel" name="phoneNumber" value={details.phoneNumber || ''} onChange={handleChange} className="input-field" placeholder="+00 000 000 000" />
         </div>
         <div className="md:col-span-2 space-y-2">

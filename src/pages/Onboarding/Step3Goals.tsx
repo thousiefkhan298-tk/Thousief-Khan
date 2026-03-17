@@ -4,12 +4,11 @@ import { HealthAssessment } from '../../types';
 interface Props {
   assessment: Partial<HealthAssessment>;
   onChange: (assessment: Partial<HealthAssessment>) => void;
-  onSubmit: () => void;
+  onNext: () => void;
   onBack: () => void;
-  loading: boolean;
 }
 
-const Step3Goals: React.FC<Props> = ({ assessment, onChange, onSubmit, onBack, loading }) => {
+const Step3Goals: React.FC<Props> = ({ assessment, onChange, onNext, onBack }) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
     onChange({ ...assessment, [e.target.name]: value });
@@ -25,7 +24,7 @@ const Step3Goals: React.FC<Props> = ({ assessment, onChange, onSubmit, onBack, l
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit();
+    onNext();
   };
 
   const goalOptions = [
@@ -37,7 +36,7 @@ const Step3Goals: React.FC<Props> = ({ assessment, onChange, onSubmit, onBack, l
     <form onSubmit={handleSubmit} className="space-y-10">
       <div className="space-y-8">
         <div className="space-y-4">
-          <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 ml-1">Primary Mission Objectives</label>
+          <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 ml-1">Primary Goals</label>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {goalOptions.map(goal => (
               <button
@@ -98,11 +97,11 @@ const Step3Goals: React.FC<Props> = ({ assessment, onChange, onSubmit, onBack, l
       </div>
       
       <div className="flex justify-between pt-8 border-t border-neutral-800">
-        <button type="button" onClick={onBack} disabled={loading} className="px-8 py-4 rounded-2xl font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:bg-neutral-800 transition-all disabled:opacity-50">
+        <button type="button" onClick={onBack} className="px-8 py-4 rounded-2xl font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:bg-neutral-800 transition-all">
           Back
         </button>
-        <button type="submit" disabled={loading} className="bg-brand-red text-white px-12 py-4 rounded-2xl font-mono text-[10px] font-bold uppercase tracking-widest hover:bg-red-700 transition-all shadow-[0_0_20px_rgba(255,0,0,0.3)] disabled:opacity-50">
-          {loading ? 'Processing...' : 'Finalize Deployment'}
+        <button type="submit" className="bg-brand-red text-white px-12 py-4 rounded-2xl font-mono text-[10px] font-bold uppercase tracking-widest hover:bg-red-700 transition-all shadow-[0_0_20px_rgba(255,0,0,0.3)]">
+          Continue
         </button>
       </div>
     </form>
