@@ -40,7 +40,7 @@ class ErrorBoundary extends Component<Props, State> {
 
       return (
         <div className="min-h-screen flex items-center justify-center bg-brand-dark p-6">
-          <div className="bg-neutral-900 border border-neutral-800 p-10 rounded-[2.5rem] max-w-lg w-full text-center">
+          <div className="bg-neutral-800 border border-neutral-700 p-10 rounded-[2.5rem] max-w-lg w-full text-center">
             <h2 className="text-3xl font-display italic uppercase text-white mb-4">System Malfunction</h2>
             <div className="bg-red-950/30 border border-red-900/50 p-6 rounded-2xl mb-6">
               <p className="text-red-500 font-mono text-xs break-words">
@@ -48,7 +48,7 @@ class ErrorBoundary extends Component<Props, State> {
               </p>
             </div>
             {isFirebaseError && (
-              <p className="text-neutral-500 text-[10px] font-mono uppercase tracking-widest mb-8">
+              <p className="text-white font-bold text-[10px] font-mono uppercase tracking-widest mb-8">
                 This usually indicates a permission issue or a configuration error in Firebase.
               </p>
             )}

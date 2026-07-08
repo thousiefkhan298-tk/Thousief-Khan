@@ -1,8 +1,40 @@
 
-export enum UserRole {
-  TRAINER = 'TRAINER',
-  CLIENT = 'CLIENT'
+export interface UIOverlay {
+  repBadge: string; // e.g., "A. 16 REPS"
+  anatomyTarget: string; // e.g., "QUADS"
+  glowColor: string; // e.g., "WHITE_NEON"
 }
+
+export interface WorkoutDisplayData {
+  exerciseName: string;
+  videoUrl: string;
+  gridLayout: "8-PANEL_SYNC";
+  uiOverlays: UIOverlay;
+}
+
+export interface WorkoutTemplateEntry {
+  exercise: string;
+  defaultSets: string;
+  defaultReps: string;
+  defaultWeight: string;
+  videoUrl?: string;
+  uiOverlays?: UIOverlay;
+}
+
+export interface WorkoutTemplate {
+  id: string;
+  trainerId: string;
+  name: string;
+  entries: WorkoutTemplateEntry[];
+  createdAt: string;
+}
+
+export type UserRole = 'TRAINER' | 'CLIENT';
+
+export const UserRole = {
+  TRAINER: 'TRAINER' as const,
+  CLIENT: 'CLIENT' as const,
+};
 
 export interface User {
   id: string;
@@ -13,6 +45,19 @@ export interface User {
   name?: string;
   lastActive?: string;
   isOnline?: boolean;
+  status?: string;
+  avatar?: 'male' | 'female';
+  isActive?: boolean;
+  bio?: string;
+  specialties?: string;
+  certifications?: string;
+  experience?: string;
+  photoURL?: string;
+  password?: string;
+  assignedPassword?: string;
+  clientDetails?: ClientDetails;
+  healthAssessment?: HealthAssessment;
+  trainerId?: string;
 }
 
 export interface ClientDetails {
@@ -50,7 +95,7 @@ export interface HealthAssessment {
   height: string;
   weight: string;
   waist: string;
-  bloodPressure: string;
+  bloodPressure?: string;
   painActivities: string[];
   medications: string;
   confirmed: boolean;
@@ -68,14 +113,23 @@ export interface ScheduledWorkout {
   status: 'SCHEDULED' | 'COMPLETED';
 }
 
+export interface MovementScreenScore {
+  raw: string;
+  final: string;
+  comments: string;
+}
+
 export interface FitnessAssessment {
-  name: string;
+  id?: string;
+  clientId: string;
   date: string;
   dob: string;
   gender: string;
+  assessNum: string;
+  admin: string;
   height: string;
   weight: string;
-  skinFold: {
+  bodyFat: {
     triceps: string;
     chest: string;
     midAxillary: string;
@@ -84,11 +138,46 @@ export interface FitnessAssessment {
     supraIliac: string;
     thigh: string;
   };
+  circumference: {
+    neck: string;
+    shoulders: string;
+    chest: string;
+    waist: string;
+    hips: string;
+    rightThigh: string;
+    leftThigh: string;
+    rightUpperArm: string;
+    leftUpperArm: string;
+  };
+  movementScreen: {
+    deepSquat: MovementScreenScore;
+    hurdleStepL: MovementScreenScore;
+    hurdleStepR: MovementScreenScore;
+    inlineLungeL: MovementScreenScore;
+    inlineLungeR: MovementScreenScore;
+    shoulderMobilityL: MovementScreenScore;
+    shoulderMobilityR: MovementScreenScore;
+    impingementL: MovementScreenScore;
+    impingementR: MovementScreenScore;
+    straightLegRaiseL: MovementScreenScore;
+    straightLegRaiseR: MovementScreenScore;
+    trunkStability: MovementScreenScore;
+    pressUpClearing: MovementScreenScore;
+    rotaryStabilityL: MovementScreenScore;
+    rotaryStabilityR: MovementScreenScore;
+    posteriorRocking: MovementScreenScore;
+    totalScore: string;
+  };
+  physicalTests: {
+    stepTestBpm: string;
+    calorieBurnAirDyne: string;
+    maximalWallSitTime: string;
+    pushUps: string;
+    maximalPlankTime: string;
+  };
   postureAnalysis: string;
-  movementScreen: string;
-  stepTestBpm: string;
-  performanceTest: string; // Air Dyne or Wall Sit
-  pushUps: string;
+  notes: string;
+  updatedAt?: string;
 }
 
 export interface FavoriteExercise {
@@ -109,6 +198,8 @@ export interface WorkoutPlan {
   clientId: string;
   sections: WorkoutPlanSection[];
   updatedAt: string;
+  approved?: boolean;
+  approvalStatus?: 'draft' | 'ready' | 'revision';
 }
 
 export interface DietPlan {
@@ -142,6 +233,14 @@ export interface UpcomingSession {
   status: 'Pending' | 'Confirmed';
 }
 
+export interface PaymentTransaction {
+  id: string;
+  date: string;
+  amount: number | string;
+  method: 'Cash' | 'Card' | 'UPI' | 'Bank Transfer' | string;
+  notes?: string;
+}
+
 export interface PaymentRecord {
   id: string;
   clientId: string;
@@ -149,6 +248,9 @@ export interface PaymentRecord {
   startDate: string;
   dueDate: string;
   status: 'Paid' | 'Pending' | 'Overdue';
+  amount?: number | string;
+  packageType?: string;
+  transactions?: PaymentTransaction[];
 }
 
 export interface WorkoutLogEntry {
@@ -156,6 +258,7 @@ export interface WorkoutLogEntry {
   sets: string;
   reps: string;
   weight: string;
+  videoUrl?: string;
 }
 
 export interface WorkoutLog {
@@ -190,3 +293,28 @@ export interface ProgressPhoto {
   imageUrl: string;
   notes?: string;
 }
+
+export interface HealthMetricsSnapshot {
+  bmi: number;
+  bmiCategory: string;
+  bmr: number;
+  tdee: number;
+  metabolicAge: number;
+  primaryPath: 'Fat Loss' | 'Muscle Gain' | 'Ready to Shoot';
+  calculatedAt: string;
+}
+
+export interface Testimonial {
+  id?: string;
+  clientName: string;
+  clientEmail?: string;
+  beforeWeight?: string;
+  afterWeight?: string;
+  durationWeeks?: string;
+  bodyQuote: string;
+  trainerId: string;
+  createdAt: string;
+  imageUrl?: string;
+  achievement?: string;
+}
+

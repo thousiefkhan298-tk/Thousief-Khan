@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../../services/firebaseService';
 import { ClientDetails, HealthAssessment, ConcernForm, FitnessAssessment } from '../../types';
 import Step1Details from './Step1Details';
-import StepConcern from './StepConcern';
+import StepGoalsAndConcerns from './StepGoalsAndConcerns';
 import Step2Health from './Step2Health';
+import StepBMIReport from './StepBMIReport';
 import StepFitness from './StepFitness';
-import Step3Goals from './Step3Goals';
 import Step4Consent from './Step4Consent';
+
 
 interface Props {
   user: any;
@@ -54,7 +55,6 @@ const OnboardingFlow: React.FC<Props> = ({ user, userData }) => {
     height: '',
     weight: '',
     waist: '',
-    bloodPressure: '',
     painActivities: [],
     medications: '',
     confirmed: false,
@@ -63,18 +63,44 @@ const OnboardingFlow: React.FC<Props> = ({ user, userData }) => {
   });
 
   const [fitnessAssessment, setFitnessAssessment] = useState<Partial<FitnessAssessment>>({
-    name: userData?.name || '',
+    clientId: user?.uid || '',
     date: new Date().toISOString().split('T')[0],
     dob: '',
     gender: '',
+    assessNum: '1',
+    admin: '',
     height: '',
     weight: '',
-    skinFold: { triceps: '', chest: '', midAxillary: '', subScapular: '', abdomen: '', supraIliac: '', thigh: '' },
+    bodyFat: { triceps: '', chest: '', midAxillary: '', subScapular: '', abdomen: '', supraIliac: '', thigh: '' },
+    circumference: { neck: '', shoulders: '', chest: '', waist: '', hips: '', rightThigh: '', leftThigh: '', rightUpperArm: '', leftUpperArm: '' },
+    movementScreen: {
+      deepSquat: { raw: '', final: '', comments: '' },
+      hurdleStepL: { raw: '', final: '', comments: '' },
+      hurdleStepR: { raw: '', final: '', comments: '' },
+      inlineLungeL: { raw: '', final: '', comments: '' },
+      inlineLungeR: { raw: '', final: '', comments: '' },
+      shoulderMobilityL: { raw: '', final: '', comments: '' },
+      shoulderMobilityR: { raw: '', final: '', comments: '' },
+      impingementL: { raw: '', final: '', comments: '' },
+      impingementR: { raw: '', final: '', comments: '' },
+      straightLegRaiseL: { raw: '', final: '', comments: '' },
+      straightLegRaiseR: { raw: '', final: '', comments: '' },
+      trunkStability: { raw: '', final: '', comments: '' },
+      pressUpClearing: { raw: '', final: '', comments: '' },
+      rotaryStabilityL: { raw: '', final: '', comments: '' },
+      rotaryStabilityR: { raw: '', final: '', comments: '' },
+      posteriorRocking: { raw: '', final: '', comments: '' },
+      totalScore: ''
+    },
+    physicalTests: {
+      stepTestBpm: '',
+      calorieBurnAirDyne: '',
+      maximalWallSitTime: '',
+      pushUps: '',
+      maximalPlankTime: ''
+    },
     postureAnalysis: '',
-    movementScreen: '',
-    stepTestBpm: '',
-    performanceTest: '',
-    pushUps: ''
+    notes: ''
   });
 
   const handleNext = () => setStep(s => s + 1);
@@ -118,10 +144,10 @@ const OnboardingFlow: React.FC<Props> = ({ user, userData }) => {
           
           <h2 className="text-6xl font-display italic uppercase leading-tight mb-8 text-white">
             {step === 1 && <>Personal <span className="text-brand-red">Details</span></>}
-            {step === 2 && <>Primary <span className="text-brand-red">Concerns</span></>}
+            {step === 2 && <>Goals & <span className="text-brand-red">Concerns</span></>}
             {step === 3 && <>Health <span className="text-brand-red">Scan</span></>}
-            {step === 4 && <>Fitness <span className="text-brand-red">Metrics</span></>}
-            {step === 5 && <>Fitness <span className="text-brand-red">Goals</span></>}
+            {step === 4 && <>Health <span className="text-brand-red">Report</span></>}
+            {step === 5 && <>Fitness <span className="text-brand-red">Metrics</span></>}
             {step === 6 && <>Final <span className="text-brand-red">Clearance</span></>}
           </h2>
 
@@ -135,28 +161,28 @@ const OnboardingFlow: React.FC<Props> = ({ user, userData }) => {
           </div>
         </div>
 
-        <div className="bg-neutral-900/50 backdrop-blur-xl border border-neutral-800 rounded-[2.5rem] p-10 shadow-2xl">
+        <div className="bg-neutral-800/50 backdrop-blur-xl border border-neutral-700 rounded-[2.5rem] p-10 shadow-2xl">
           {step === 1 && (
             <Step1Details details={clientDetails} onChange={setClientDetails} onNext={handleNext} />
           )}
           {step === 2 && (
-            <StepConcern concern={concern} onChange={setConcern} onNext={handleNext} onBack={handleBack} />
+            <StepGoalsAndConcerns assessment={healthAssessment} concern={concern} onChangeAssessment={setHealthAssessment} onChangeConcern={setConcern} onNext={handleNext} onBack={handleBack} />
           )}
           {step === 3 && (
             <Step2Health assessment={healthAssessment} onChange={setHealthAssessment} onNext={handleNext} onBack={handleBack} />
           )}
           {step === 4 && (
-            <StepFitness assessment={fitnessAssessment} onChange={setFitnessAssessment} onNext={handleNext} onBack={handleBack} />
+            <StepBMIReport assessment={healthAssessment} clientDetails={clientDetails} onChange={setHealthAssessment} onNext={handleNext} onBack={handleBack} />
           )}
           {step === 5 && (
-            <Step3Goals assessment={healthAssessment} onChange={setHealthAssessment} onNext={handleNext} onBack={handleBack} />
+            <StepFitness assessment={fitnessAssessment} onChange={setFitnessAssessment} onNext={handleNext} onBack={handleBack} />
           )}
           {step === 6 && (
             <Step4Consent assessment={healthAssessment} onChange={setHealthAssessment} onSubmit={handleSubmit} onBack={handleBack} />
           )}
         </div>
         
-        <p className="mt-12 text-center font-mono text-[8px] uppercase tracking-[0.4em] text-neutral-600">
+        <p className="mt-12 text-center font-mono text-[8px] uppercase tracking-[0.4em] text-neutral-50 font-bold">
           Secure Data Encryption Active // SpeedFit Systems v2.5
         </p>
       </div>

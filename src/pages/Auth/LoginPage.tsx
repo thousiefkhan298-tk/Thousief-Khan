@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword } from 'firebase/auth';
-import { auth, db, handleFirestoreError, OperationType } from '../../firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { ArrowRight, Zap } from 'lucide-react';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { auth, db, handleFirestoreError, OperationType } from '../../firebase.js';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { ArrowRight, Zap, ShieldAlert, Sparkles } from 'lucide-react';
 import QRCodeDisplay from '../../components/QRCodeDisplay';
 
 const LoginPage: React.FC = () => {
@@ -13,67 +13,129 @@ const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleGoogleLogin = async () => {
     setError('');
     setLoading(true);
+    const provider = new GoogleAuthProvider();
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithPopup(auth, provider);
       navigate('/dashboard');
     } catch (err: any) {
-      console.error("Login error:", err);
-      if (err.code === 'auth/operation-not-allowed') {
-        setError('Email/Password login is not enabled. Please enable it in the Firebase Console under Authentication > Sign-in method.');
-      } else if (err.code === 'auth/unauthorized-domain') {
-        setError('This domain is not authorized for Firebase Authentication. Please add this domain to the "Authorized domains" list in the Firebase Console (Authentication > Settings).');
-      } else {
-        setError(err.message || 'Failed to login');
-      }
+      setError('Google login failed: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
     setError('');
     setLoading(true);
+    let autoLoggedIn = false;
     try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      
-      // Check if user exists in Firestore
-      const userDoc = await getDoc(doc(db, 'users', result.user.uid));
-      
-      if (!userDoc.exists()) {
-        // If they don't exist, create a basic profile
-        const TRAINER_EMAIL = 'thousiefkhan298@gmail.com';
-        const SECONDARY_TRAINER_EMAIL = 'speedfit029@gmail.com';
-        const userEmail = result.user.email || '';
-        const isTrainer = [TRAINER_EMAIL.toLowerCase(), SECONDARY_TRAINER_EMAIL.toLowerCase()].includes(userEmail.toLowerCase());
-        const role = isTrainer ? 'TRAINER' : 'CLIENT';
-
-        await setDoc(doc(db, 'users', result.user.uid), {
-          uid: result.user.uid,
-          email: result.user.email,
-          name: result.user.displayName || '',
-          role,
-          onboardingCompleted: role === 'TRAINER',
-          createdAt: new Date().toISOString()
-        });
-      }
-
+      await signInWithEmailAndPassword(auth, email, password);
       navigate('/dashboard');
     } catch (err: any) {
-      console.error("Google Login error:", err);
-      if (err.code === 'auth/unauthorized-domain') {
-        setError('This domain is not authorized for Google Sign-in. Please add this domain to the "Authorized domains" list in the Firebase Console (Authentication > Settings).');
-      } else if (err.code === 'auth/popup-blocked') {
-        setError('The sign-in popup was blocked by your browser. Please allow popups for this site.');
-      } else {
-        setError(err.message || 'Failed to login with Google');
+      console.error("Login error:", err);
+      
+      // Check if client exists in Firestore but hasn't joined Firebase Auth yet
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+        try {
+          console.log("Checking if athlete exists in Firestore but has not joined Firebase Auth yet...");
+          const usersRef = collection(db, 'users');
+          const q = query(usersRef, where('email', '==', email.toLowerCase().trim()));
+          const querySnap = await getDocs(q);
+          
+          if (!querySnap.empty) {
+            const userDocSnap = querySnap.docs[0];
+            const userData = userDocSnap.data();
+            
+            const storedPassword = userData.password || userData.assignedPassword;
+            if (storedPassword && String(storedPassword).trim() === password.trim()) {
+              console.log("Match found in database! Creating Firebase Auth credential for client...");
+              const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+              const uid = userCredential.user.uid;
+              
+              // create document at users/uid
+              await setDoc(doc(db, 'users', uid), {
+                ...userData,
+                uid: uid,
+                id: uid,
+                onboardingCompleted: userData.onboardingCompleted !== undefined ? userData.onboardingCompleted : false
+              });
+              
+              if (userDocSnap.id !== uid) {
+                // Migrate all trainer-defined records and activities seamlessly to the final UID
+                const collectionsToMigrate = [
+                  'workoutLogs',
+                  'trainerNotes',
+                  'workoutPlans',
+                  'attendance',
+                  'rescheduleRequests',
+                  'sessions',
+                  'dietPlans',
+                  'pendingDrafts',
+                  'paymentRecords',
+                  'progressPhotos',
+                  'scheduledWorkouts'
+                ];
+
+                for (const colName of collectionsToMigrate) {
+                  try {
+                    const subQ = query(collection(db, colName), where('clientId', '==', userDocSnap.id));
+                    const subSnap = await getDocs(subQ);
+                    for (const subDoc of subSnap.docs) {
+                      await updateDoc(subDoc.ref, { clientId: uid });
+                    }
+                  } catch (e) {
+                    console.warn(`Error migrating subcollection ${colName}:`, e);
+                  }
+                }
+
+                // Handle favorites
+                try {
+                  const favQ = query(collection(db, 'favorites'), where('uid', '==', userDocSnap.id));
+                  const favSnap = await getDocs(favQ);
+                  for (const favDoc of favSnap.docs) {
+                    await updateDoc(favDoc.ref, { uid: uid });
+                  }
+                } catch (e) {
+                  console.warn("Error migrating favorites:", e);
+                }
+
+                // Mark the temporary doc with a migration pointer and hide it from listings
+                await updateDoc(userDocSnap.ref, {
+                  isMigrated: true,
+                  migratedTo: uid
+                });
+              }
+              
+              console.log("Client registration auto-completed! Logging in...");
+              autoLoggedIn = true;
+              navigate('/dashboard');
+              return;
+            }
+          }
+        } catch (fallbackErr) {
+          console.error("Auto registration fallback failed:", fallbackErr);
+        }
+      }
+
+      if (!autoLoggedIn) {
+        if (err.code === 'auth/operation-not-allowed') {
+          setError('Email/Password login is not enabled. Please enable it in the Firebase Console under Authentication > Sign-in method.');
+        } else if (err.code === 'auth/unauthorized-domain') {
+          setError('This domain is not authorized for Firebase Authentication. Please add this domain to the "Authorized domains" list in the Firebase Console (Authentication > Settings).');
+        } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+          setError('Invalid credentials.');
+        } else {
+          setError(err.message || 'Failed to login');
+        }
       }
     } finally {
-      setLoading(false);
+      if (!autoLoggedIn) {
+        setLoading(false);
+      }
     }
   };
 
@@ -91,28 +153,43 @@ const LoginPage: React.FC = () => {
           </div>
           <div className="flex items-center space-x-4 w-full">
             <div className="h-[1px] flex-1 bg-brand-red/30"></div>
-            <span className="text-[10px] font-mono uppercase tracking-[0.3em] text-neutral-400">BUILD TO TRANSFORMATION</span>
+            <span className="text-[10px] font-mono uppercase tracking-[0.3em] text-neutral-50 font-bold">BUILD TO TRANSFORMATION</span>
             <div className="h-[1px] flex-1 bg-brand-red/30"></div>
           </div>
         </div>
 
-        <div className="bg-neutral-900/50 backdrop-blur-xl p-10 rounded-[2.5rem] border border-neutral-800 shadow-2xl">
+        <div className="bg-neutral-800/50 backdrop-blur-xl p-10 rounded-[2.5rem] border border-neutral-700 shadow-2xl">
           <div className="mb-10 text-center">
             <h1 className="text-5xl font-display italic uppercase leading-[1.1] mb-2 text-white">
               Power <span className="text-brand-red">Up!</span>
             </h1>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-400">Secure Portal Access</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-50 font-bold">Secure Portal Access</p>
           </div>
 
           {error && (
-            <div className="bg-red-950/30 border border-red-900/50 text-red-500 p-4 rounded-2xl mb-8 text-xs font-mono">
-              {error}
+            <div className="bg-red-950/30 border border-red-900/50 text-red-500 p-4 rounded-2xl mb-8 text-xs font-mono flex items-start gap-2.5">
+              <ShieldAlert className="w-5 h-5 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
+          <button
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="w-full py-4 bg-white text-neutral-900 font-bold rounded-2xl mb-6 hover:bg-neutral-200 transition-all text-xs font-mono uppercase tracking-widest flex items-center justify-center gap-2"
+          >
+            {loading ? 'Processing...' : 'Login with Google'}
+          </button>
+
+          <div className="relative flex py-4 items-center mb-6">
+            <div className="flex-grow border-t border-neutral-700"></div>
+            <span className="flex-shrink-0 mx-4 text-white font-bold text-[9px] font-mono uppercase tracking-widest">Or Email</span>
+            <div className="flex-grow border-t border-neutral-700"></div>
+          </div>
+
           <form onSubmit={handleEmailLogin} className="space-y-6 mb-6">
             <div className="relative">
-              <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-3 ml-1">Identity (Email)</label>
+              <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-50 font-bold mb-3 ml-1">Identity (Email)</label>
               <input
                 type="email"
                 required
@@ -124,7 +201,7 @@ const LoginPage: React.FC = () => {
             </div>
             
             <div className="relative">
-              <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-3 ml-1">Secret (Password)</label>
+              <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-50 font-bold mb-3 ml-1">Secret (Password)</label>
               <input
                 type="password"
                 required
@@ -145,43 +222,32 @@ const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          <div className="relative flex py-4 items-center">
-            <div className="flex-grow border-t border-neutral-800"></div>
-            <span className="flex-shrink-0 mx-4 text-neutral-500 text-xs font-mono uppercase">Or</span>
-            <div className="flex-grow border-t border-neutral-800"></div>
-          </div>
-
-          <div className="space-y-4 mt-4">
-            <button
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              className="w-full bg-white text-black font-bold py-3 px-6 rounded-xl flex items-center justify-center space-x-2 hover:bg-neutral-200 transition-colors"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-              </svg>
-              <span>Sign in with Google</span>
-            </button>
-          </div>
-
-          <div className="mt-10 pt-8 border-t border-neutral-800 text-center">
-            <p className="text-neutral-500 text-xs font-mono uppercase tracking-wider">
+          <div className="mt-10 pt-8 border-t border-neutral-700 text-center">
+            <p className="text-white font-bold text-xs font-mono uppercase tracking-wider">
               New Client?{' '}
               <Link to="/signup" className="text-brand-red font-bold hover:text-red-400 transition-colors">
                 Join the Ranks
               </Link>
             </p>
-            <div className="mt-8 flex flex-col items-center">
-              <p className="text-neutral-500 text-[10px] font-mono uppercase tracking-widest mb-4">Scan to Download App</p>
-              <QRCodeDisplay url={window.location.origin} />
+            
+            <div className="mt-8 p-6 bg-neutral-800/30 rounded-2xl border border-neutral-700/50">
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-50 font-bold mb-4 italic">Installation Instructions</p>
+              <div className="grid grid-cols-2 gap-4 text-left">
+                <div className="space-y-2">
+                  <p className="text-[8px] font-mono text-brand-red uppercase tracking-widest font-bold">iOS / Safari</p>
+                  <p className="text-[8px] font-mono text-white font-bold leading-relaxed uppercase">1. Tap Share icon<br/>2. Scroll to "Add to Home Screen"</p>
+                </div>
+                <div className="space-y-2 border-l border-neutral-700 pl-4">
+                  <p className="text-[8px] font-mono text-brand-red uppercase tracking-widest font-bold">Android / Chrome</p>
+                  <p className="text-[8px] font-mono text-white font-bold leading-relaxed uppercase">1. Tap Menu (⋮)<br/>2. Tap "Install app" or "Add to Home Screen"</p>
+                </div>
+              </div>
+            </div>
+
             </div>
           </div>
         </div>
       </div>
-    </div>
   );
 };
 

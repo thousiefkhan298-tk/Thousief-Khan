@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db, handleFirestoreError, OperationType } from '../../firebase';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { auth, db, handleFirestoreError, OperationType } from '../../firebase.js';
 import { ArrowRight, Zap } from 'lucide-react';
 
 const SignupPage: React.FC = () => {
@@ -12,6 +12,8 @@ const SignupPage: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const trainerIdFromUrl = searchParams.get('trainerId');
 
   const TRAINER_EMAIL = 'thousiefkhan298@gmail.com';
   const SECONDARY_TRAINER_EMAIL = 'speedfit029@gmail.com';
@@ -19,6 +21,12 @@ const SignupPage: React.FC = () => {
   const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
+
     setLoading(true);
     try {
       const isTrainer = [TRAINER_EMAIL.toLowerCase(), SECONDARY_TRAINER_EMAIL.toLowerCase()].includes(email.toLowerCase());
@@ -29,14 +37,80 @@ const SignupPage: React.FC = () => {
       const path = `users/${uid}`;
       
       try {
+        let existingData: any = {};
+        let oldDocId: string | null = null;
+        let oldRef: any = null;
+
+        // Try to locate pre-existing profile or trainer invitation with matching email
+        try {
+          const q = query(collection(db, 'users'), where('email', '==', email.toLowerCase().trim()));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            oldDocId = snap.docs[0].id;
+            oldRef = snap.docs[0].ref;
+            existingData = snap.docs[0].data();
+            console.log("Pre-existing invitation or profile found for this email address. Syncing existing records.");
+          }
+        } catch (findErr) {
+          console.warn("Could not check for pre-existing profiles:", findErr);
+        }
+
         await setDoc(doc(db, 'users', uid), {
+          ...existingData,
           uid: uid,
           email,
-          name,
+          name: name || existingData.name || '',
           role,
-          onboardingCompleted: role === 'TRAINER',
-          createdAt: new Date().toISOString()
+          trainerId: trainerIdFromUrl || existingData.trainerId || null,
+          onboardingCompleted: existingData.onboardingCompleted !== undefined ? existingData.onboardingCompleted : (role === 'TRAINER'),
+          createdAt: existingData.createdAt || new Date().toISOString()
         });
+
+        // Migrate sub-collections from old transient document ID to the authenticated UID
+        if (oldDocId && oldDocId !== uid) {
+          const collectionsToMigrate = [
+            'workoutLogs',
+            'trainerNotes',
+            'workoutPlans',
+            'attendance',
+            'rescheduleRequests',
+            'sessions',
+            'dietPlans',
+            'pendingDrafts',
+            'paymentRecords',
+            'progressPhotos',
+            'scheduledWorkouts'
+          ];
+
+          for (const colName of collectionsToMigrate) {
+            try {
+              const subQ = query(collection(db, colName), where('clientId', '==', oldDocId));
+              const subSnap = await getDocs(subQ);
+              for (const subDoc of subSnap.docs) {
+                await updateDoc(subDoc.ref, { clientId: uid });
+              }
+            } catch (e) {
+              console.warn(`Error migrating subcollection ${colName} during signup:`, e);
+            }
+          }
+
+          // Migrate favorites specifically which has 'uid' instead of 'clientId'
+          try {
+            const favQ = query(collection(db, 'favorites'), where('uid', '==', oldDocId));
+            const favSnap = await getDocs(favQ);
+            for (const favDoc of favSnap.docs) {
+              await updateDoc(favDoc.ref, { uid: uid });
+            }
+          } catch (e) {
+            console.warn("Error migrating favorites during signup:", e);
+          }
+
+          // Mark transition in old document and hide it
+          await updateDoc(oldRef, {
+            isMigrated: true,
+            migratedTo: uid
+          });
+        }
       } catch (firestoreErr: any) {
         console.error("Firestore error during signup:", firestoreErr);
         handleFirestoreError(firestoreErr, OperationType.CREATE, path);
@@ -51,6 +125,8 @@ const SignupPage: React.FC = () => {
         setError('This domain is not authorized for Firebase Authentication. Please add this domain to the "Authorized domains" list in the Firebase Console (Authentication > Settings).');
       } else if (err.code === 'auth/email-already-in-use') {
         setError('This email is already registered. Please login instead.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('Password must be at least 6 characters long.');
       } else {
         // Check if it's our custom JSON error from handleFirestoreError
         try {
@@ -63,69 +139,6 @@ const SignupPage: React.FC = () => {
           // Not a JSON error
         }
         setError(err.message || 'Failed to sign up');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleSignup = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      
-      const userEmail = result.user.email || '';
-      const isTrainer = [TRAINER_EMAIL.toLowerCase(), SECONDARY_TRAINER_EMAIL.toLowerCase()].includes(userEmail.toLowerCase());
-      const role = isTrainer ? 'TRAINER' : 'CLIENT';
-      
-      // Check if user exists
-      const uid = result.user.uid;
-      const path = `users/${uid}`;
-      let userDoc;
-      try {
-        userDoc = await getDoc(doc(db, 'users', uid));
-      } catch (firestoreErr: any) {
-        console.error("Firestore error during Google signup:", firestoreErr);
-        handleFirestoreError(firestoreErr, OperationType.GET, path);
-      }
-      
-      if (userDoc && !userDoc.exists()) {
-        try {
-          await setDoc(doc(db, 'users', uid), {
-            uid: uid,
-            email: userEmail,
-            name: result.user.displayName || '',
-            role,
-            onboardingCompleted: role === 'TRAINER',
-            createdAt: new Date().toISOString()
-          });
-        } catch (setErr: any) {
-          console.error("Firestore error creating user doc during Google signup:", setErr);
-          handleFirestoreError(setErr, OperationType.CREATE, path);
-        }
-      }
-
-      navigate('/dashboard');
-    } catch (err: any) {
-      console.error("Google Signup error:", err);
-      if (err.code === 'auth/unauthorized-domain') {
-        setError('This domain is not authorized for Google Sign-in. Please add this domain to the "Authorized domains" list in the Firebase Console (Authentication > Settings).');
-      } else if (err.code === 'auth/popup-blocked') {
-        setError('The sign-in popup was blocked by your browser. Please allow popups for this site.');
-      } else {
-        // Check if it's our custom JSON error from handleFirestoreError
-        try {
-          const parsed = JSON.parse(err.message);
-          if (parsed.error && parsed.operationType) {
-            setError(`Database Error: ${parsed.error} during ${parsed.operationType} on ${parsed.path}`);
-            return;
-          }
-        } catch (e) {
-          // Not a JSON error
-        }
-        setError(err.message || 'Failed to sign up with Google');
       }
     } finally {
       setLoading(false);
@@ -146,17 +159,17 @@ const SignupPage: React.FC = () => {
           </div>
           <div className="flex items-center space-x-4 w-full">
             <div className="h-[1px] flex-1 bg-brand-red/30"></div>
-            <span className="text-[10px] font-mono uppercase tracking-[0.3em] text-neutral-400">BUILD TO TRANSFORMATION</span>
+            <span className="text-[10px] font-mono uppercase tracking-[0.3em] text-neutral-50 font-bold">BUILD TO TRANSFORMATION</span>
             <div className="h-[1px] flex-1 bg-brand-red/30"></div>
           </div>
         </div>
 
-        <div className="bg-neutral-900/50 backdrop-blur-xl p-10 rounded-[2.5rem] border border-neutral-800 shadow-2xl">
+        <div className="bg-neutral-800/50 backdrop-blur-xl p-10 rounded-[2.5rem] border border-neutral-700 shadow-2xl">
           <div className="mb-10 text-center">
             <h1 className="text-5xl font-display italic uppercase leading-[1.1] mb-2 text-white">
               Join <span className="text-brand-red">Now</span>
             </h1>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-400">New Client Registration</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-50 font-bold">New Client Registration</p>
           </div>
 
           {error && (
@@ -167,7 +180,7 @@ const SignupPage: React.FC = () => {
 
           <form onSubmit={handleEmailSignup} className="space-y-6 mb-6">
             <div className="relative">
-              <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-3 ml-1">Full Name</label>
+              <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-50 font-bold mb-3 ml-1">Full Name</label>
               <input
                 type="text"
                 required
@@ -179,7 +192,7 @@ const SignupPage: React.FC = () => {
             </div>
 
             <div className="relative">
-              <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-3 ml-1">Identity (Email)</label>
+              <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-50 font-bold mb-3 ml-1">Identity (Email)</label>
               <input
                 type="email"
                 required
@@ -191,7 +204,7 @@ const SignupPage: React.FC = () => {
             </div>
 
             <div className="relative">
-              <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-3 ml-1">Secret (Password)</label>
+              <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-50 font-bold mb-3 ml-1">Secret (Password)</label>
               <input
                 type="password"
                 required
@@ -212,30 +225,8 @@ const SignupPage: React.FC = () => {
             </button>
           </form>
 
-          <div className="relative flex py-4 items-center">
-            <div className="flex-grow border-t border-neutral-800"></div>
-            <span className="flex-shrink-0 mx-4 text-neutral-500 text-xs font-mono uppercase">Or</span>
-            <div className="flex-grow border-t border-neutral-800"></div>
-          </div>
-
-          <div className="space-y-4 mt-4">
-            <button
-              onClick={handleGoogleSignup}
-              disabled={loading}
-              className="w-full bg-white text-black font-bold py-3 px-6 rounded-xl flex items-center justify-center space-x-2 hover:bg-neutral-200 transition-colors"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-              </svg>
-              <span>Sign up with Google</span>
-            </button>
-          </div>
-
-          <div className="mt-10 pt-8 border-t border-neutral-800 text-center">
-            <p className="text-neutral-500 text-xs font-mono uppercase tracking-wider">
+          <div className="mt-10 pt-8 border-t border-neutral-700 text-center">
+            <p className="text-white font-bold text-xs font-mono uppercase tracking-wider">
               Already Registered?{' '}
               <Link to="/login" className="text-brand-red font-bold hover:text-red-400 transition-colors">
                 Access Portal

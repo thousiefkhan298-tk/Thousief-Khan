@@ -238,11 +238,11 @@ const ExerciseAnimation: React.FC<Props> = ({ exerciseName, className = "w-24 h-
   }
 
   return (
-    <div className="flex flex-col items-center justify-center p-4 bg-neutral-900/50 rounded-2xl border border-neutral-800 hover:border-brand-red/50 transition-colors group">
+    <div className="flex flex-col items-center justify-center p-4 bg-neutral-800/50 rounded-2xl border border-neutral-700 hover:border-brand-red/50 transition-colors group">
       <div className="opacity-80 group-hover:opacity-100 transition-opacity">
         {renderAnimation()}
       </div>
-      <p className="mt-3 text-[10px] font-mono uppercase tracking-widest text-neutral-400 text-center group-hover:text-white transition-colors">
+      <p className="mt-3 text-[10px] font-mono uppercase tracking-widest text-neutral-50 font-bold text-center group-hover:text-white transition-colors">
         {exerciseName}
       </p>
     </div>

@@ -1,11 +1,13 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import { getStorage } from 'firebase/storage';
+import firebaseConfig from '../firebase-applet-config.json' with { type: 'json' };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 
 export async function testFirebaseConnection() {
   try {
@@ -23,14 +25,16 @@ export async function testFirebaseConnection() {
   }
 }
 
-export enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
+export type OperationType = 'create' | 'update' | 'delete' | 'list' | 'get' | 'write';
+
+export const OperationType = {
+  CREATE: 'create' as const,
+  UPDATE: 'update' as const,
+  DELETE: 'delete' as const,
+  LIST: 'list' as const,
+  GET: 'get' as const,
+  WRITE: 'write' as const,
+};
 
 export interface FirestoreErrorInfo {
   error: string;

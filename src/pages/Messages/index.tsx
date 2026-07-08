@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { firebaseService } from '../../services/firebaseService';
-import { auth } from '../../firebase';
-import Layout from '../../components/Layout';
-import { Message, User } from '../../types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { firebaseService } from '../../services/firebaseService.js';
+import { auth } from '../../firebase.js';
+import Layout from '../../components/Layout.js';
+import { Message, User } from '../../types.js';
 import { Send, User as UserIcon, MessageSquare, ShieldCheck, Zap } from 'lucide-react';
 
 const Messages: React.FC = () => {
@@ -20,12 +20,14 @@ const Messages: React.FC = () => {
       try {
         const uid = auth.currentUser?.uid;
         if (!uid) return;
-        const currentUserData = await firebaseService.getUser(uid);
+        const currentUserData = (await firebaseService.getUser(uid)) as any;
         if (!currentUserData) return;
         setUserData(currentUserData);
 
         // Fetch contacts
-        const contactsData = await firebaseService.getUsers();
+        const contactsData = currentUserData.role === 'TRAINER' 
+          ? await firebaseService.getUsers() 
+          : await firebaseService.getTrainers();
         // Filter out self
         const otherUsers = contactsData.filter(u => u.id !== currentUserData.id);
         setContacts(otherUsers);
@@ -48,16 +50,56 @@ const Messages: React.FC = () => {
     if (!uid) return;
 
     const unsubscribe = firebaseService.subscribeToMessages(uid, (msgs) => {
-      // Filter messages for the selected contact
-      const filteredMessages = msgs.filter(m => 
-        (m.senderId === uid && m.receiverId === selectedContactId) ||
-        (m.senderId === selectedContactId && m.receiverId === uid)
-      );
-      setAllMessages(filteredMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
+      setAllMessages(msgs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
     });
     
     return () => unsubscribe();
-  }, [selectedContactId]);
+  }, []);
+
+  // Filter messages for the selected contact
+  const filteredMessages = useMemo(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !selectedContactId) return [];
+    return allMessages.filter(m => 
+      (m.senderId === uid && m.receiverId === selectedContactId) ||
+      (m.senderId === selectedContactId && m.receiverId === uid)
+    );
+  }, [allMessages, selectedContactId]);
+
+  // Calculate unread counts
+  const unreadCounts = useMemo(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return {};
+    const counts: Record<string, number> = {};
+    allMessages.forEach(m => {
+      if (m.receiverId === uid && !m.read) {
+        counts[m.senderId] = (counts[m.senderId] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [allMessages]);
+
+  // Mark messages as read when selecting a contact
+  useEffect(() => {
+    if (selectedContactId) {
+      const uid = auth.currentUser?.uid;
+      if (!uid) return;
+      
+      const unreadMessageIds = allMessages
+        .filter(m => m.senderId === selectedContactId && m.receiverId === uid && !m.read)
+        .map(m => m.id);
+        
+      if (unreadMessageIds.length > 0) {
+        firebaseService.markMessagesAsRead(unreadMessageIds).catch(err => {
+          console.error("Error marking messages as read:", err);
+        });
+      }
+    }
+  }, [selectedContactId, allMessages]);
+
+  const toggleReadStatus = async (message: Message) => {
+    await firebaseService.updateMessage(message.id, { read: !message.read });
+  };
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -98,7 +140,7 @@ const Messages: React.FC = () => {
         <div className="flex items-center justify-center h-64">
           <div className="flex flex-col items-center space-y-4">
             <div className="w-12 h-12 border-4 border-brand-red border-t-transparent rounded-full animate-spin"></div>
-            <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">Establishing Uplink...</p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-white font-bold">Establishing Uplink...</p>
           </div>
         </div>
       </Layout>
@@ -115,48 +157,48 @@ const Messages: React.FC = () => {
         <h2 className="text-6xl font-display italic uppercase leading-none">
           Message <span className="text-brand-red">Feed</span>
         </h2>
-        <p className="text-neutral-500 font-mono text-[10px] uppercase tracking-widest mt-4">
+        <p className="text-white font-bold font-mono text-[10px] uppercase tracking-widest mt-4">
           Direct communication channel with {userData?.role === 'TRAINER' ? 'clients' : 'trainers'}.
         </p>
       </div>
 
-      <div className="bg-neutral-900/50 rounded-[2.5rem] border border-neutral-800 overflow-hidden flex h-[700px] shadow-2xl">
+      <div className="bg-neutral-800/50 rounded-[2.5rem] border border-neutral-700 overflow-hidden flex h-[700px] shadow-2xl">
         {/* Contacts Sidebar */}
-        <div className="w-1/3 border-r border-neutral-800 flex flex-col bg-neutral-900/30">
-          <div className="p-6 border-b border-neutral-800 bg-neutral-900/50">
+        <div className="w-1/3 border-r border-neutral-700 flex flex-col bg-neutral-800/30">
+          <div className="p-6 border-b border-neutral-700 bg-neutral-800/50">
             <h3 className="font-display italic text-xl uppercase tracking-wider text-white">Contacts</h3>
-            <p className="text-[8px] font-mono uppercase tracking-widest text-neutral-600 mt-1">Active Operatives</p>
+            <p className="text-[8px] font-mono uppercase tracking-widest text-neutral-50 font-bold mt-1">Active Operatives</p>
           </div>
           <div className="flex-1 overflow-y-auto custom-scrollbar">
             {contacts.length === 0 ? (
               <div className="p-10 text-center">
-                <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-600 italic">No contacts found.</p>
+                <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-50 font-bold italic">No contacts found.</p>
               </div>
             ) : (
               contacts.map(contact => {
                 const contactId = contact.id;
-                const unreadCount = 0; // Simplified for now
+                const unreadCount = unreadCounts[contactId] || 0;
 
                 return (
                   <button
                     key={contactId}
                     onClick={() => setSelectedContactId(contactId)}
-                    className={`w-full text-left p-6 flex items-center space-x-4 border-b border-neutral-800/50 transition-all group ${
+                    className={`w-full text-left p-6 flex items-center space-x-4 border-b border-neutral-700/50 transition-all group ${
                       selectedContactId === contactId ? 'bg-neutral-800' : 'hover:bg-neutral-800/40'
                     }`}
                   >
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors ${
-                      selectedContactId === contactId ? 'bg-brand-red text-white' : 'bg-neutral-800 text-neutral-500 group-hover:bg-neutral-700'
+                      selectedContactId === contactId ? 'bg-brand-red text-white' : 'bg-neutral-800 text-white font-bold group-hover:bg-neutral-700'
                     }`}>
                       <UserIcon className="w-6 h-6" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className={`font-mono text-[10px] uppercase tracking-widest truncate ${
-                        selectedContactId === contactId ? 'text-white' : 'text-neutral-400'
+                        selectedContactId === contactId ? 'text-white' : 'text-neutral-50 font-bold'
                       }`}>{contact.name || contact.email}</p>
                       <div className="flex items-center space-x-2 mt-1">
                         <div className={`w-1.5 h-1.5 rounded-full ${selectedContactId === contactId ? 'bg-brand-red animate-pulse' : 'bg-neutral-700'}`}></div>
-                        <p className="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">{contact.role}</p>
+                        <p className="text-[8px] font-mono text-neutral-50 font-bold uppercase tracking-widest">{contact.role}</p>
                       </div>
                     </div>
                     {unreadCount > 0 && (
@@ -172,14 +214,14 @@ const Messages: React.FC = () => {
         </div>
 
         {/* Chat Area */}
-        <div className="flex-1 flex flex-col bg-neutral-900/10">
+        <div className="flex-1 flex flex-col bg-neutral-800/10">
           {selectedContactId ? (
             <>
               {/* Chat Header */}
-              <div className="p-6 border-b border-neutral-800 bg-neutral-900/50 flex items-center justify-between">
+              <div className="p-6 border-b border-neutral-700 bg-neutral-800/50 flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div className="w-12 h-12 rounded-2xl bg-neutral-800 flex items-center justify-center border border-neutral-700">
-                    <UserIcon className="w-6 h-6 text-neutral-400" />
+                    <UserIcon className="w-6 h-6 text-neutral-50 font-bold" />
                   </div>
                   <div>
                     <h3 className="font-display italic text-2xl uppercase tracking-wider text-white">
@@ -187,7 +229,7 @@ const Messages: React.FC = () => {
                     </h3>
                     <div className="flex items-center space-x-2">
                       <ShieldCheck className="w-3 h-3 text-brand-red" />
-                      <p className="text-[8px] font-mono text-neutral-500 uppercase tracking-widest">Secure Channel Active</p>
+                      <p className="text-[8px] font-mono text-white font-bold uppercase tracking-widest">Secure Channel Active</p>
                     </div>
                   </div>
                 </div>
@@ -196,38 +238,33 @@ const Messages: React.FC = () => {
 
               {/* Messages List */}
               <div className="flex-1 p-8 overflow-y-auto space-y-6 custom-scrollbar bg-brand-dark/20">
-                {allMessages.length === 0 ? (
+                {filteredMessages.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center space-y-4">
-                    <div className="w-16 h-16 rounded-full border border-dashed border-neutral-800 flex items-center justify-center">
+                    <div className="w-16 h-16 rounded-full border border-dashed border-neutral-700 flex items-center justify-center">
                       <MessageSquare className="w-6 h-6 text-neutral-800" />
                     </div>
-                    <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-700 italic">
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-white font-bold font-bold italic">
                       No transmission history found. Initiate contact.
                     </p>
                   </div>
                 ) : (
-                  allMessages.map(msg => {
+                  filteredMessages.map(msg => {
                     const isMine = msg.senderId === userData?.id;
                     return (
                       <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[70%] ${
                           isMine 
                             ? 'bg-brand-red text-white rounded-3xl rounded-tr-none shadow-lg shadow-brand-red/10' 
-                            : 'bg-neutral-800 text-neutral-200 rounded-3xl rounded-tl-none border border-neutral-700'
+                            : 'bg-neutral-800 text-white font-bold rounded-3xl rounded-tl-none border border-neutral-700'
                         } px-6 py-4`}>
                           <p className="font-mono text-[10px] uppercase tracking-wider leading-relaxed">{msg.content}</p>
-                          <div className={`flex items-center justify-end space-x-2 mt-3 ${isMine ? 'text-red-200' : 'text-neutral-500'}`}>
+                          <div className={`flex items-center justify-between mt-3 ${isMine ? 'text-red-200' : 'text-white font-bold'}`}>
                             <p className="text-[8px] font-mono uppercase tracking-widest">
                               {formatTime(msg.timestamp)}
                             </p>
-                            {isMine && (
-                              <div className="flex items-center space-x-1">
-                                <span className="text-[8px] font-mono uppercase tracking-widest opacity-50">•</span>
-                                <span className="text-[8px] font-mono uppercase tracking-widest">
-                                  {msg.read ? 'Acknowledged' : 'Transmitted'}
-                                </span>
-                              </div>
-                            )}
+                            <button onClick={() => toggleReadStatus(msg)} className="text-[8px] font-mono uppercase tracking-widest hover:underline">
+                              {msg.read ? 'Mark Unread' : 'Mark Read'}
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -238,7 +275,7 @@ const Messages: React.FC = () => {
               </div>
 
               {/* Message Input */}
-              <div className="p-8 border-t border-neutral-800 bg-neutral-900/50">
+              <div className="p-8 border-t border-neutral-700 bg-neutral-800/50">
                 <form onSubmit={handleSend} className="flex space-x-4">
                   <input
                     type="text"
@@ -259,10 +296,10 @@ const Messages: React.FC = () => {
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center space-y-6">
-              <div className="w-24 h-24 rounded-[2rem] border border-dashed border-neutral-800 flex items-center justify-center">
+              <div className="w-24 h-24 rounded-[2rem] border border-dashed border-neutral-700 flex items-center justify-center">
                 <Zap className="w-10 h-10 text-neutral-800" />
               </div>
-              <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-700 italic">
+              <p className="font-mono text-[10px] uppercase tracking-widest text-white font-bold font-bold italic">
                 Select an operative to establish uplink.
               </p>
             </div>

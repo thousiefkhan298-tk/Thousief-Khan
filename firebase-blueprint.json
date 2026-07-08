@@ -9,9 +9,19 @@
         "email": { "type": "string", "format": "email", "description": "User email" },
         "name": { "type": "string", "description": "User name" },
         "role": { "type": "string", "enum": ["TRAINER", "CLIENT"] },
-        "createdAt": { "type": "string", "format": "date", "description": "Account creation date" }
+        "onboardingCompleted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "phoneNumber": { "type": "string" },
+        "bio": { "type": "string", "description": "Trainer bio/philosophy string" },
+        "specialties": { "type": "string", "description": "Comma separated trainer specialties list" },
+        "certifications": { "type": "string", "description": "Trainer certifications string" },
+        "experience": { "type": "string", "description": "Years or style of coaching experience" },
+        "photoURL": { "type": "string", "description": "URL link to profile display photograph" },
+        "avatar": { "type": "string", "enum": ["male", "female"] },
+        "isActive": { "type": "boolean" }
       },
-      "required": ["uid", "email"]
+      "required": ["uid", "email", "role"]
     },
     "WorkoutLog": {
       "title": "WorkoutLog",
@@ -22,7 +32,129 @@
         "date": { "type": "string", "format": "date" },
         "entries": { "type": "array" },
         "notes": { "type": "string" }
-      }
+      },
+      "required": ["clientId", "date", "entries"]
+    },
+    "TrainerNote": {
+      "title": "TrainerNote",
+      "description": "Private notes from trainer about a client",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "note": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "note"]
+    },
+    "WorkoutPlan": {
+      "title": "WorkoutPlan",
+      "description": "Structured workout plan for a client",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "sections": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "sections"]
+    },
+    "DietPlan": {
+      "title": "DietPlan",
+      "description": "Nutrition plan for a client",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "plan": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "plan"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Client attendance record",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["Present", "Missed"] }
+      },
+      "required": ["clientId", "date", "status"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Chat message between trainer and client",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "participants": { "type": "array" },
+        "content": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["senderId", "receiverId", "participants", "content", "timestamp"]
+    },
+    "PaymentRecord": {
+      "title": "PaymentRecord",
+      "description": "Client payment history",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "package": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "dueDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["Paid", "Pending", "Overdue"] }
+      },
+      "required": ["clientId", "package", "startDate", "dueDate", "status"]
+    },
+    "RescheduleRequest": {
+      "title": "RescheduleRequest",
+      "description": "Request to change session timing",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "originalDate": { "type": "string", "format": "date-time" },
+        "requestedDate": { "type": "string", "format": "date-time" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "originalDate", "requestedDate", "status"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "Scheduled training session",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Pending", "Confirmed"] }
+      },
+      "required": ["clientId", "date", "status"]
+    },
+    "Favorite": {
+      "title": "Favorite",
+      "description": "Client's favorite exercises",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "defaultSets": { "type": "string" },
+        "defaultReps": { "type": "string" }
+      },
+      "required": ["uid", "name"]
+    },
+    "ProgressPhoto": {
+      "title": "ProgressPhoto",
+      "description": "Client progress photos",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "imageUrl": { "type": "string", "format": "uri" },
+        "notes": { "type": "string" }
+      },
+      "required": ["clientId", "date", "imageUrl"]
     },
     "ScheduledWorkout": {
       "title": "ScheduledWorkout",
@@ -34,10 +166,145 @@
         "entries": { "type": "array" },
         "notes": { "type": "string" },
         "status": { "type": "string", "enum": ["SCHEDULED", "COMPLETED", "CANCELLED"] }
+      },
+      "required": ["clientId", "date", "entries", "status"]
+    },
+    "HealthAssessment": {
+      "title": "HealthAssessment",
+      "description": "Client health and lifestyle assessment",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "conditions": { "type": "array" },
+        "otherConditions": { "type": "string" },
+        "smoking": { "type": "boolean" },
+        "alcohol": { "type": "boolean" },
+        "stress": { "type": "string", "enum": ["Low", "Moderate", "High"] },
+        "occupation": { "type": "string", "enum": ["Active", "Sedentary"] },
+        "sleepHours": { "type": "string" },
+        "currentlyActive": { "type": "boolean" },
+        "pastExperience": { "type": "string" },
+        "trainingDaysPerWeek": { "type": "string" },
+        "goals": { "type": "array" },
+        "height": { "type": "string" },
+        "weight": { "type": "string" },
+        "waist": { "type": "string" },
+        "bloodPressure": { "type": "string" },
+        "medications": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId"]
+    },
+    "FitnessAssessment": {
+      "title": "FitnessAssessment",
+      "description": "Physical performance and posture assessment",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "dob": { "type": "string" },
+        "gender": { "type": "string" },
+        "assessNum": { "type": "string" },
+        "admin": { "type": "string" },
+        "height": { "type": "string" },
+        "weight": { "type": "string" },
+        "bodyFat": {
+          "type": "object",
+          "properties": {
+            "triceps": { "type": "string" },
+            "chest": { "type": "string" },
+            "midAxillary": { "type": "string" },
+            "subScapular": { "type": "string" },
+            "abdomen": { "type": "string" },
+            "supraIliac": { "type": "string" },
+            "thigh": { "type": "string" }
+          }
+        },
+        "circumference": {
+          "type": "object",
+          "properties": {
+            "neck": { "type": "string" },
+            "shoulders": { "type": "string" },
+            "chest": { "type": "string" },
+            "waist": { "type": "string" },
+            "hips": { "type": "string" },
+            "rightThigh": { "type": "string" },
+            "leftThigh": { "type": "string" },
+            "rightUpperArm": { "type": "string" },
+            "leftUpperArm": { "type": "string" }
+          }
+        },
+        "movementScreen": {
+          "type": "object",
+          "properties": {
+            "deepSquat": { "$ref": "MovementScreenScore" },
+            "hurdleStepL": { "$ref": "MovementScreenScore" },
+            "hurdleStepR": { "$ref": "MovementScreenScore" },
+            "inlineLungeL": { "$ref": "MovementScreenScore" },
+            "inlineLungeR": { "$ref": "MovementScreenScore" },
+            "shoulderMobilityL": { "$ref": "MovementScreenScore" },
+            "shoulderMobilityR": { "$ref": "MovementScreenScore" },
+            "impingementL": { "$ref": "MovementScreenScore" },
+            "impingementR": { "$ref": "MovementScreenScore" },
+            "straightLegRaiseL": { "$ref": "MovementScreenScore" },
+            "straightLegRaiseR": { "$ref": "MovementScreenScore" },
+            "trunkStability": { "$ref": "MovementScreenScore" },
+            "pressUpClearing": { "$ref": "MovementScreenScore" },
+            "rotaryStabilityL": { "$ref": "MovementScreenScore" },
+            "rotaryStabilityR": { "$ref": "MovementScreenScore" },
+            "posteriorRocking": { "$ref": "MovementScreenScore" },
+            "totalScore": { "type": "string" }
+          }
+        },
+        "physicalTests": {
+          "type": "object",
+          "properties": {
+            "stepTestBpm": { "type": "string" },
+            "calorieBurnAirDyne": { "type": "string" },
+            "maximalWallSitTime": { "type": "string" },
+            "pushUps": { "type": "string" },
+            "maximalPlankTime": { "type": "string" }
+          }
+        },
+        "postureAnalysis": { "type": "string" },
+        "notes": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId"]
+    },
+    "MovementScreenScore": {
+      "type": "object",
+      "properties": {
+        "raw": { "type": "string" },
+        "final": { "type": "string" },
+        "comments": { "type": "string" }
       }
+    },
+    "Testimonial": {
+      "title": "Testimonial",
+      "description": "Transformation testimonial of a client posted by the trainer",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "beforeWeight": { "type": "string" },
+        "afterWeight": { "type": "string" },
+        "durationWeeks": { "type": "string" },
+        "bodyQuote": { "type": "string" },
+        "trainerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "imageUrl": { "type": "string", "format": "uri" },
+        "achievement": { "type": "string" }
+      },
+      "required": ["clientName", "bodyQuote", "trainerId", "createdAt"]
     }
   },
   "firestore": {
+    "/testimonials/{docId}": {
+      "schema": { "$ref": "Testimonial" },
+      "description": "Transformation testimonials posted by key trainers"
+    },
     "/users/{uid}": {
       "schema": { "$ref": "User" },
       "description": "User profile documents"
@@ -46,9 +313,57 @@
       "schema": { "$ref": "WorkoutLog" },
       "description": "Workout logs"
     },
+    "/trainerNotes/{docId}": {
+      "schema": { "$ref": "TrainerNote" },
+      "description": "Trainer notes"
+    },
+    "/workoutPlans/{docId}": {
+      "schema": { "$ref": "WorkoutPlan" },
+      "description": "Workout plans"
+    },
+    "/dietPlans/{docId}": {
+      "schema": { "$ref": "DietPlan" },
+      "description": "Diet plans"
+    },
+    "/attendance/{docId}": {
+      "schema": { "$ref": "Attendance" },
+      "description": "Attendance records"
+    },
+    "/messages/{docId}": {
+      "schema": { "$ref": "Message" },
+      "description": "Chat messages"
+    },
+    "/paymentRecords/{docId}": {
+      "schema": { "$ref": "PaymentRecord" },
+      "description": "Payment records"
+    },
+    "/rescheduleRequests/{docId}": {
+      "schema": { "$ref": "RescheduleRequest" },
+      "description": "Reschedule requests"
+    },
+    "/sessions/{docId}": {
+      "schema": { "$ref": "Session" },
+      "description": "Scheduled sessions"
+    },
+    "/favorites/{docId}": {
+      "schema": { "$ref": "Favorite" },
+      "description": "Favorite exercises"
+    },
+    "/progressPhotos/{docId}": {
+      "schema": { "$ref": "ProgressPhoto" },
+      "description": "Progress photos"
+    },
     "/scheduledWorkouts/{docId}": {
       "schema": { "$ref": "ScheduledWorkout" },
       "description": "Scheduled workouts"
+    },
+    "/healthAssessments/{docId}": {
+      "schema": { "$ref": "HealthAssessment" },
+      "description": "Health assessments"
+    },
+    "/fitnessAssessments/{docId}": {
+      "schema": { "$ref": "FitnessAssessment" },
+      "description": "Fitness assessments"
     }
   }
 }
