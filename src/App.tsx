@@ -130,7 +130,7 @@ const App: React.FC = () => {
     return () => unsubscribeSessions();
   }, [user?.uid, notifiedSessions]);
 
-  if (loading) {
+  if (loading && typeof window !== 'undefined' && window.location.pathname !== '/') {
     return <div className="min-h-screen flex items-center justify-center bg-brand-dark text-white font-mono text-xs uppercase tracking-widest">Initializing Systems...</div>;
   }
 
