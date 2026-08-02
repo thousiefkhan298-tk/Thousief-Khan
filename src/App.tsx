@@ -5,7 +5,6 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db, testFirebaseConnection } from './firebase.js';
 import LoginPage from './pages/Auth/LoginPage.js';
-import Landing from './pages/Landing';
 import SignupPage from './pages/Auth/SignupPage.js';
 import Dashboard from './pages/Dashboard.js';
 import OnboardingFlow from './pages/Onboarding/OnboardingFlow.js';
@@ -130,7 +129,7 @@ const App: React.FC = () => {
     return () => unsubscribeSessions();
   }, [user?.uid, notifiedSessions]);
 
-  if (loading && typeof window !== 'undefined' && window.location.pathname !== '/') {
+  if (loading) {
     return <div className="min-h-screen flex items-center justify-center bg-brand-dark text-white font-mono text-xs uppercase tracking-widest">Initializing Systems...</div>;
   }
 
@@ -140,7 +139,7 @@ const App: React.FC = () => {
     <ErrorBoundary>
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
-          <Route path="/" element={user ? (requireOnboarding ? <Navigate to="/onboarding" /> : <Navigate to="/dashboard" />) : <Landing />} />
+          <Route path="/" element={user ? (requireOnboarding ? <Navigate to="/onboarding" /> : <Navigate to="/dashboard" />) : <Navigate to="/login" />} />
           <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage />} />
           <Route path="/signup" element={user ? <Navigate to="/" /> : <SignupPage />} />
           <Route path="/onboarding" element={user ? (requireOnboarding ? <OnboardingFlow user={user} userData={user} /> : <Navigate to="/dashboard" />) : <Navigate to="/login" />} />

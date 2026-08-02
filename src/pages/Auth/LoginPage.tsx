@@ -1,27 +1,135 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db, handleFirestoreError, OperationType } from '../../firebase.js';
 import { doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
-import { ArrowRight, Zap, ShieldAlert, Sparkles } from 'lucide-react';
+import { ArrowRight, Zap, ShieldAlert, Sparkles, Check } from 'lucide-react';
 import QRCodeDisplay from '../../components/QRCodeDisplay';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Load remembered credentials if present
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('speedfit_remembered_email');
+    const savedPassword = localStorage.getItem('speedfit_remembered_password');
+    if (savedEmail && savedPassword) {
+      setEmail(savedEmail);
+      setPassword(savedPassword);
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleGoogleLogin = async () => {
     setError('');
     setLoading(true);
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      const googleUser = result.user;
+      const googleEmail = googleUser.email?.toLowerCase().trim();
+
+      if (googleEmail) {
+        // Look up if a user already exists with this email address in our users collection
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('email', '==', googleEmail));
+        const querySnap = await getDocs(q);
+
+        if (!querySnap.empty) {
+          const matchedDoc = querySnap.docs[0];
+          const matchedUID = matchedDoc.id;
+
+          // If the matching document's ID is different from the Google User's UID,
+          // we should clone/migrate this user's data to the new Google User's UID so they keep their data!
+          if (matchedUID !== googleUser.uid) {
+            console.log(`Migrating existing user data for ${googleEmail} from old ID ${matchedUID} to Google UID ${googleUser.uid}...`);
+            const userData = matchedDoc.data();
+
+            // Create/update the new Google UID doc in users with existing user data
+            await setDoc(doc(db, 'users', googleUser.uid), {
+              ...userData,
+              uid: googleUser.uid,
+              id: googleUser.uid,
+              googleLinked: true
+            });
+
+            // Seamlessly migrate all reference ID collections to keep the history!
+            const collectionsToMigrate = [
+              'workoutLogs',
+              'trainerNotes',
+              'workoutPlans',
+              'attendance',
+              'rescheduleRequests',
+              'sessions',
+              'dietPlans',
+              'pendingDrafts',
+              'paymentRecords',
+              'progressPhotos',
+              'scheduledWorkouts'
+            ];
+
+            for (const colName of collectionsToMigrate) {
+              try {
+                const subQ = query(collection(db, colName), where('clientId', '==', matchedUID));
+                const subSnap = await getDocs(subQ);
+                for (const subDoc of subSnap.docs) {
+                  await updateDoc(subDoc.ref, { clientId: googleUser.uid });
+                }
+              } catch (e) {
+                console.warn(`Error migrating subcollection ${colName}:`, e);
+              }
+            }
+
+            // Also search for favorites if any exist
+            try {
+              const favQ = query(collection(db, 'favorites'), where('uid', '==', matchedUID));
+              const favSnap = await getDocs(favQ);
+              for (const favDoc of favSnap.docs) {
+                await updateDoc(favDoc.ref, { uid: googleUser.uid });
+              }
+            } catch (e) {
+              console.warn("Error migrating favorites:", e);
+            }
+
+            // Flag the old record as migrated so it doesn't duplicate
+            await updateDoc(matchedDoc.ref, {
+              isMigrated: true,
+              migratedTo: googleUser.uid
+            });
+          } else {
+            // Already matches, just make sure googleLinked is true
+            await updateDoc(doc(db, 'users', googleUser.uid), {
+              googleLinked: true
+            });
+          }
+        } else {
+          // If no user exists yet in Firestore for this Google account, we can provision a basic client role document
+          await setDoc(doc(db, 'users', googleUser.uid), {
+            uid: googleUser.uid,
+            id: googleUser.uid,
+            name: googleUser.displayName || googleEmail.split('@')[0],
+            email: googleEmail,
+            role: 'CLIENT',
+            onboardingCompleted: false,
+            createdAt: new Date().toISOString(),
+            googleLinked: true
+          });
+        }
+      }
+
       navigate('/dashboard');
     } catch (err: any) {
-      setError('Google login failed: ' + err.message);
+      console.error("Google Auth Error:", err);
+      if (err.code === 'auth/popup-blocked') {
+        setError('Google login popup was blocked. Please enable popups for this site or use standard email login.');
+      } else {
+        setError('Google login failed: ' + err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -34,6 +142,16 @@ const LoginPage: React.FC = () => {
     let autoLoggedIn = false;
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      
+      // Save credentials if Remember Me is active
+      if (rememberMe) {
+        localStorage.setItem('speedfit_remembered_email', email);
+        localStorage.setItem('speedfit_remembered_password', password);
+      } else {
+        localStorage.removeItem('speedfit_remembered_email');
+        localStorage.removeItem('speedfit_remembered_password');
+      }
+
       navigate('/dashboard');
     } catch (err: any) {
       console.error("Login error:", err);
@@ -112,6 +230,16 @@ const LoginPage: React.FC = () => {
               
               console.log("Client registration auto-completed! Logging in...");
               autoLoggedIn = true;
+
+              // Save credentials if Remember Me is active
+              if (rememberMe) {
+                localStorage.setItem('speedfit_remembered_email', email);
+                localStorage.setItem('speedfit_remembered_password', password);
+              } else {
+                localStorage.removeItem('speedfit_remembered_email');
+                localStorage.removeItem('speedfit_remembered_password');
+              }
+
               navigate('/dashboard');
               return;
             }
@@ -212,6 +340,30 @@ const LoginPage: React.FC = () => {
               />
             </div>
 
+            {/* Remember Me and Forgot Password Container */}
+            <div className="flex items-center justify-between mt-4">
+              <label className="flex items-center space-x-2.5 cursor-pointer group select-none">
+                <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all duration-200 ${rememberMe ? 'bg-[#E10600] border-[#FF3B30]' : 'border-neutral-700 bg-neutral-900 group-hover:border-[#FF3B30]'}`}>
+                  {rememberMe && <Check className="w-3.5 h-3.5 text-white stroke-[3px]" />}
+                </div>
+                <input 
+                  type="checkbox" 
+                  className="hidden" 
+                  checked={rememberMe} 
+                  onChange={(e) => setRememberMe(e.target.checked)} 
+                />
+                <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 group-hover:text-white transition-colors">Remember Me</span>
+              </label>
+              
+              <button 
+                type="button"
+                onClick={handleGoogleLogin}
+                className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 hover:text-[#FF3B30] transition-colors"
+              >
+                Forgot Password?
+              </button>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
@@ -221,6 +373,13 @@ const LoginPage: React.FC = () => {
               {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
             </button>
           </form>
+
+          {/* Recovery and Gmail restoration helpful tip */}
+          <div className="bg-neutral-900/40 border border-[#2A2A2A] rounded-2xl p-4 text-left mb-6">
+            <p className="text-[9px] font-mono uppercase tracking-wider text-neutral-400 leading-relaxed">
+              <span className="text-[#FF3B30] font-bold">★ Gmail Sign-In:</span> If you forgot your password, authenticate via Google. Speed Fit auto-matches your Gmail address and instantly retrieves all client profiles, diet schedules, and workout histories securely.
+            </p>
+          </div>
 
           <div className="mt-10 pt-8 border-t border-neutral-700 text-center">
             <p className="text-white font-bold text-xs font-mono uppercase tracking-wider">

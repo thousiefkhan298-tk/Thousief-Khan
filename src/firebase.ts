@@ -1,11 +1,22 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json' with { type: 'json' };
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
+
+enableIndexedDbPersistence(db).catch((err) => {
+  if (err.code == 'failed-precondition') {
+      // Multiple tabs open, persistence can only be enabled in one
+      console.warn('Firebase persistence failed-precondition: Multiple tabs open');
+  } else if (err.code == 'unimplemented') {
+      // Browser doesn't support persistence
+      console.warn('Firebase persistence unimplemented: Browser does not support persistence');
+  }
+});
+
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 

@@ -1,9 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { AppLayout } from '../../components/AppLayout';
+import { TrainerDashboardCard } from '../../components/TrainerDashboardCard';
 import { firebaseService } from '../../services/firebaseService.js';
 import { User, WorkoutLog, WorkoutPlan, Testimonial } from '../../types.js';
 import { calculateHealthMetrics, getBMIColor } from '../../utils/healthCalculations';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useClients } from '../../hooks/useClients';
+import { useAllWorkoutPlans } from '../../hooks/useAllWorkoutPlans';
+import { useAllAttendance } from '../../hooks/useAllAttendance';
+import { useAllPayments } from '../../hooks/useAllPayments';
+import { useAllDietPlans } from '../../hooks/useAllDietPlans';
+import { useMessages } from '../../hooks/useMessages';
 import { 
   Users, 
   ClipboardList, 
@@ -73,16 +80,17 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
   const navigate = useNavigate();
 
   // Core subscribed states
-  // const [clients, setClients] = useState<User[]>([]); // Using useClients hook
+  const { clients, loading: clientsLoading } = useClients(userData?.uid);
+  const { plans: workoutPlans } = useAllWorkoutPlans();
+  const { attendance: attendanceRecords } = useAllAttendance();
+  const { payments: paymentRecords } = useAllPayments();
+  const { plans: dietPlans } = useAllDietPlans();
+  
   const [recentLogs, setRecentLogs] = useState<WorkoutLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<{ id: string, clientId?: string, type: 'inactive' | 'session' | 'payment' | 'message', title: string, message: string, date: number }[]>([]);
   const [rescheduleRequests, setRescheduleRequests] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
-  const [paymentRecords, setPaymentRecords] = useState<any[]>([]);
-  const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
-  const [workoutPlans, setWorkoutPlans] = useState<any[]>([]);
-  const [dietPlans, setDietPlans] = useState<any[]>([]);
   const [allDrafts, setAllDrafts] = useState<any[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
 
@@ -203,7 +211,6 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
   const [currentWorkoutContent, setCurrentWorkoutContent] = useState('');
 
   // Subscriptions setup
-  const { clients, loading: clientsLoading } = useClients(userData?.uid);
   
   useEffect(() => {
     const unsubscribeLogs = firebaseService.subscribeToWorkoutLogs((logs) => {
@@ -214,24 +221,8 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
       setRescheduleRequests(requests);
     });
 
-    const unsubscribePayments = firebaseService.subscribeToAllPaymentRecords((records) => {
-      setPaymentRecords(records);
-    });
-
     const unsubscribeSessions = firebaseService.subscribeToAllSessions((data) => {
       setSessions(data);
-    });
-
-    const unsubscribeAttendance = firebaseService.subscribeToAllAttendance((data) => {
-      setAttendanceRecords(data);
-    });
-
-    const unsubscribePlans = firebaseService.subscribeToAllWorkoutPlans((data) => {
-      setWorkoutPlans(data);
-    });
-
-    const unsubscribeDietPlans = firebaseService.subscribeToAllDietPlans((data) => {
-      setDietPlans(data);
     });
 
     const unsubscribeDrafts = firebaseService.subscribeToAllPendingDrafts((data) => {
@@ -249,11 +240,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
     return () => {
       unsubscribeLogs();
       unsubscribeRequests();
-      unsubscribePayments();
       unsubscribeSessions();
-      unsubscribeAttendance();
-      unsubscribePlans();
-      unsubscribeDietPlans();
       unsubscribeDrafts();
       unsubscribeTestimonials();
       clearTimeout(timeout);
@@ -1207,22 +1194,25 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
   if (loading) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-[#050505]">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full animate-spin"></div>
-          <p className="font-mono text-[10px] uppercase tracking-widest text-[#B2B2B2] font-bold">Initializing HQ Console...</p>
+      <AppLayout>
+        <div className="absolute inset-0 flex items-center justify-center bg-[#111111]">
+          <div className="flex flex-col items-center space-y-4">
+            <div className="w-10 h-10 border-4 border-[#E10600] border-t-transparent rounded-full animate-spin"></div>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-[#B2B2B2] font-bold">Initializing Premium Console...</p>
+          </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="space-y-8 pb-10 trainer-dark-theme bg-[#141417] text-white min-h-screen p-6">
-      
-      {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#1e1e24] pb-5">
-        <div>
-          <div className="flex items-center space-x-1.5 mb-1.5 text-brand-red font-mono text-[10px] uppercase tracking-widest font-bold">
+    <AppLayout>
+      <div className="space-y-8 pb-10 trainer-dark-theme bg-[#111111] text-white">
+        
+        {/* HEADER SECTION */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#2A2A2A] pb-5">
+          <div>
+            <div className="flex items-center space-x-1.5 mb-1.5 text-[#E10600] font-mono text-[10px] uppercase tracking-widest font-bold">
             <span className="w-1.5 h-1.5 bg-brand-red rounded-full animate-pulse"></span>
             <span>Coach Command Center</span>
           </div>
@@ -1257,37 +1247,30 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
         <div className="space-y-8">
           {/* Main counts Board */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-[20px]">
-              <span className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider font-bold">ACTIVE ATHLETES</span>
-              <p className="text-3xl font-bold text-brand-red mt-2 font-display italic uppercase">{clients.filter(c => c.isActive !== false).length}</p>
-              <p className="text-[10px] font-mono text-neutral-400 uppercase mt-1">Onboarding pipeline stable</p>
-            </div>
-
-            <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-[20px]">
-              <span className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider font-bold">SYSTEM WARNINGS</span>
-              <p className="text-3xl font-bold text-brand-red mt-2 font-display italic uppercase">{alerts.length}</p>
-              <p className="text-[10px] font-mono text-rose-500/80 uppercase mt-1">Requiring immediate attention</p>
-            </div>
-
-            <div className="bg-white border border-[#E2E8F0] p-5 rounded-[20px] shadow-sm">
-              <span className="text-[9px] font-mono text-[#64748B] uppercase tracking-wider font-bold">PENDING SESSIONS</span>
-              <p className="text-3xl font-bold text-emerald-500 mt-2 font-display italic uppercase">
-                {sessions.filter(s => s.status === 'PENDING' || s.status === 'Pending').length}
-              </p>
-              <p className="text-[10px] font-mono text-[#64748B] uppercase mt-1">Upcoming calendar bookings</p>
-            </div>
-
-            <Link 
-              to="/dashboard?tab=drafts"
-              className="bg-white border border-[#E2E8F0] hover:border-amber-400 p-5 rounded-[20px] shadow-sm block transition-all"
-            >
-              <span className="text-[9px] font-mono text-[#64748B] uppercase tracking-wider font-bold">AI DRAFTS WAITING</span>
-              <p className="text-3xl font-bold text-amber-500 mt-2 font-display italic uppercase flex items-center justify-between">
-                <span>{pendingReviews.length}</span>
-                <Zap className="w-5 h-5 text-amber-400 shrink-0" />
-              </p>
-              <p className="text-[10px] font-mono text-amber-600 font-bold uppercase mt-1">VALIDATION MANDATORY ✓</p>
-            </Link>
+            <TrainerDashboardCard 
+              title="ACTIVE ATHLETES" 
+              value={clients.filter(c => c.isActive !== false).length}
+              trend="Onboarding pipeline stable"
+              icon={<Users className="w-5 h-5 text-red-500" />}
+            />
+            <TrainerDashboardCard 
+              title="SYSTEM WARNINGS" 
+              value={alerts.length}
+              trend="Requiring immediate attention"
+              icon={<AlertTriangle className="w-5 h-5 text-red-500" />}
+            />
+            <TrainerDashboardCard 
+              title="PENDING SESSIONS" 
+              value={sessions.filter(s => s.status === 'PENDING' || s.status === 'Pending').length}
+              trend="Upcoming calendar bookings"
+              icon={<Calendar className="w-5 h-5 text-emerald-500" />}
+            />
+            <TrainerDashboardCard 
+              title="AI DRAFTS WAITING" 
+              value={allDrafts.length}
+              trend="VALIDATION MANDATORY ✓"
+              icon={<Sparkles className="w-5 h-5 text-amber-500" />}
+            />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -4315,6 +4298,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
       )}
 
     </div>
+  </AppLayout>
   );
 };
 

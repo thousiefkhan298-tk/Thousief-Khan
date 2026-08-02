@@ -368,6 +368,69 @@ You MUST respond in pure JSON matching the following structure EXACTLY. No markd
     }
   });
 
+  // AI COACH INTERACTION CHAT ROUTE
+  app.post("/api/ai-coach/chat", async (req, res) => {
+    try {
+      const { message, clientContext, chatHistory } = req.body;
+      if (!message) {
+        return res.status(400).json({ error: "Message is required." });
+      }
+
+      console.log(`AI Coach Chat processing message from client or trainer...`);
+
+      const formattedHistory = (chatHistory || []).map((msg: any) => {
+        return `${msg.sender === 'user' ? 'Client/Trainer' : 'AI Coach'}: ${msg.text}`;
+      }).join("\n");
+
+      const systemInstruction = `You are the Speed Fit Elite AI Coach, a world-class certified fitness, nutrition, and lifestyle transformation specialist.
+Your style is inspired by Nike Training Club, Whoop, Apple Fitness+, and high-end luxury coaching portals.
+You are technical, elite, scientific, yet encouraging and motivational. You speak with high-end premium clarity.
+You NEVER speak like a generic LLM chatbot. NEVER say "I am an AI", "As an artificial intelligence", or reference Gemini.
+You have access to the client's current context below. You must understand this context automatically without asking them to repeat it.
+
+CLIENT CONTEXT:
+${JSON.stringify(clientContext || {}, null, 2)}
+
+-------------------------
+GUIDELINES:
+1. Address the user's questions specifically and scientifically.
+2. Formulate practical advice: adjust caloric/protein/water intake, modify training, outline active recovery strategies, progressive overload guidelines, sleep optimizations, or stress management tools.
+3. Be direct, crisp, and clean. Use beautiful markdown with neat bullet points for layout where appropriate. Keep it highly readable with spacious, bold formatting.
+4. If a client is asking for workouts or diets, you can outline highly optimized schedules featuring Indian food suggestions or targeted routines.
+`;
+
+      const prompt = `
+CHAT HISTORY:
+${formattedHistory}
+
+Current User Message: ${message}
+
+Response:`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          systemInstruction: systemInstruction,
+          temperature: 0.7,
+          maxOutputTokens: 1000
+        }
+      });
+
+      res.json({
+        success: true,
+        reply: response.text || ""
+      });
+
+    } catch (error: any) {
+      console.error("Error in AI Coach Chat endpoint:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message || "An unknown error occurred during AI Coach chat."
+      });
+    }
+  });
+
   const distPath = path.resolve(__dirname, "dist");
 
   if (process.env.NODE_ENV === "production") {

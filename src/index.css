@@ -1,21 +1,29 @@
-@import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;700;900&family=Space+Grotesk:wght@300;400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=League+Spartan:wght@400;700;800;900&family=Montserrat:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Anton", sans-serif;
+  --font-display: "League Spartan", sans-serif;
+  --font-sub: "Montserrat", sans-serif;
   --font-mono: "Space Grotesk", monospace;
   --color-brand-red: var(--brand-red-color);
-  --color-brand-dark: #0d0d0f;
-  --color-brand-surface: #141417;
+  --color-brand-accent-red: #FF3B30;
+  --color-brand-charcoal: #1B1B1B;
+  --color-brand-dark: #111111;
+  --color-brand-card: #1F1F1F;
+  --color-brand-border: #2A2A2A;
+  --color-brand-hover: #2A2A2A;
+  --color-brand-success: #16A34A;
+  --color-brand-warning: #F59E0B;
+  --color-brand-error: #DC2626;
 
   /* Overwrite Tailwind color scales to compile automatically to luxurious high-contrast non-glare Charcoal Black with clean white typography */
   --color-white: #ffffff;
   
-  --color-slate-50: #0d0d0f;
-  --color-slate-100: #141417;
-  --color-slate-200: #1e1e24;
-  --color-slate-300: #2a2a35;
+  --color-slate-50: #111111;
+  --color-slate-100: #1B1B1B;
+  --color-slate-200: #1F1F1F;
+  --color-slate-300: #2A2A2A;
   --color-slate-400: #424250;
   --color-slate-500: #94a3b8;
   --color-slate-600: #cbd5e1;
@@ -24,10 +32,10 @@
   --color-slate-900: #ffffff;
   --color-slate-950: #ffffff;
 
-  --color-neutral-50: #0d0d0f;
-  --color-neutral-100: #141417;
-  --color-neutral-200: #1e1e24;
-  --color-neutral-300: #2a2a35;
+  --color-neutral-50: #111111;
+  --color-neutral-100: #1B1B1B;
+  --color-neutral-200: #1F1F1F;
+  --color-neutral-300: #2A2A2A;
   --color-neutral-400: #424250;
   --color-neutral-500: #94a3b8;
   --color-neutral-600: #cbd5e1;
@@ -36,10 +44,10 @@
   --color-neutral-900: #ffffff;
   --color-neutral-950: #ffffff;
 
-  --color-zinc-50: #0d0d0f;
-  --color-zinc-100: #141417;
-  --color-zinc-200: #1e1e24;
-  --color-zinc-300: #2a2a35;
+  --color-zinc-50: #111111;
+  --color-zinc-100: #1B1B1B;
+  --color-zinc-200: #1F1F1F;
+  --color-zinc-300: #2A2A2A;
   --color-zinc-400: #424250;
   --color-zinc-500: #94a3b8;
   --color-zinc-600: #cbd5e1;
@@ -48,10 +56,10 @@
   --color-zinc-900: #ffffff;
   --color-zinc-950: #ffffff;
 
-  --color-gray-50: #0d0d0f;
-  --color-gray-100: #141417;
-  --color-gray-200: #1e1e24;
-  --color-gray-300: #2a2a35;
+  --color-gray-50: #111111;
+  --color-gray-100: #1B1B1B;
+  --color-gray-200: #1F1F1F;
+  --color-gray-300: #2A2A2A;
   --color-gray-400: #424250;
   --color-gray-500: #94a3b8;
   --color-gray-600: #cbd5e1;
