@@ -46,6 +46,20 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+  
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
   
   // Notification States
   const [showNotifications, setShowNotifications] = useState(false);
@@ -371,6 +385,17 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
         </header>
 
         {/* CONTAINER FOR CHILDREN PAGES */}
+        {!isOnline && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-3 flex items-center justify-between gap-4 text-xs font-mono text-amber-400">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+              <span className="font-bold uppercase tracking-wider">Offline Cache Mode Active</span>
+              <span className="text-[10px] text-gray-400 font-sans hidden sm:inline">— Network connection was lost. You can continue log-keeping & viewing data safely; your changes will automatically synchronize with the cloud once connection is restored.</span>
+            </div>
+            <span className="text-[9px] uppercase px-2 py-0.5 bg-amber-500/25 border border-amber-500/30 text-amber-300 rounded font-bold shrink-0">IndexedDB Cache Persistent</span>
+          </div>
+        )}
+
         <main className="flex-1 p-6 md:p-8 overflow-y-auto custom-scrollbar">
           {children}
         </main>

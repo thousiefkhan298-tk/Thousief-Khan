@@ -22,6 +22,18 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 import { notificationService } from './services/notificationService';
 import { firebaseService } from './services/firebaseService';
+import { ADMIN_EMAIL, TRAINER_EMAILS } from './constants';
+
+// Role is decided by the signed-in email address only. It is never chosen by the
+// user and never trusted from a stale Firestore field, so no other account can
+// gain trainer access.
+const TRAINER_EMAIL_SET = TRAINER_EMAILS.map((e) => e.trim().toLowerCase());
+
+const resolveRole = (email?: string | null): 'TRAINER' | 'CLIENT' => {
+  const e = (email || '').trim().toLowerCase();
+  if (e === ADMIN_EMAIL.trim().toLowerCase()) return 'TRAINER';
+  return TRAINER_EMAIL_SET.includes(e) ? 'TRAINER' : 'CLIENT';
+};
 
 const App: React.FC = () => {
   const [user, setUser] = useState<any>(null);
@@ -31,7 +43,15 @@ const App: React.FC = () => {
   useEffect(() => {
     const applyTheme = () => {
       const mode = localStorage.getItem('theme-mode') || 'red-and-black';
-      document.documentElement.classList.add('trainer-dark-theme');
+      
+      if (user?.role === 'CLIENT') {
+        document.documentElement.classList.add('client-red-black');
+        document.documentElement.classList.remove('trainer-dark-theme');
+      } else {
+        document.documentElement.classList.add('trainer-dark-theme');
+        document.documentElement.classList.remove('client-red-black');
+      }
+
       if (mode === 'monochrome') {
         document.documentElement.classList.add('theme-monochrome');
       } else {
@@ -43,11 +63,44 @@ const App: React.FC = () => {
     return () => {
       window.removeEventListener('theme-changed', applyTheme);
     };
-  }, []);
+  }, [user]);
 
   useEffect(() => {
+    // Programmatic cleanup of Dev Storage / Service Worker / Browser Caches to prevent stale rendering
+    const clearDevStorageAndServiceWorker = async () => {
+      const swCleaned = localStorage.getItem('dev_sw_cleaned_v9');
+      if (!swCleaned) {
+        try {
+          // 1. Unregister all active Service Workers
+          if ('serviceWorker' in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            for (const registration of registrations) {
+              await registration.unregister();
+              console.log('Service Worker unregistered successfully during cleanup');
+            }
+          }
+          
+          // 2. Clear Cache Storage
+          if ('caches' in window) {
+            const cacheNames = await caches.keys();
+            for (const name of cacheNames) {
+              await caches.delete(name);
+              console.log('Cache storage cleared:', name);
+            }
+          }
+
+          localStorage.setItem('dev_sw_cleaned_v9', 'true');
+          console.log('Dev storage successfully cleaned! Performing hot reload...');
+          window.location.reload();
+        } catch (error) {
+          console.error('Error cleaning dev storage:', error);
+        }
+      }
+    };
+
+    clearDevStorageAndServiceWorker();
     testFirebaseConnection();
-    notificationService.registerServiceWorker();
+    
     let userUnsubscribe: (() => void) | null = null;
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       console.log("Auth state changed, user:", firebaseUser ? firebaseUser.uid : "null");
@@ -57,17 +110,18 @@ const App: React.FC = () => {
       }
 
       if (firebaseUser) {
+        const role = resolveRole(firebaseUser.email);
         userUnsubscribe = onSnapshot(doc(db, 'users', firebaseUser.uid), (docSnap) => {
-          console.log("User doc updated in real-time, exists:", docSnap.exists());
+          console.log("User doc updated in real-time, exists:", docSnap.exists(), "role:", role);
           if (docSnap.exists()) {
-            setUser({ ...firebaseUser, ...docSnap.data() });
+            setUser({ ...firebaseUser, ...docSnap.data(), role });
           } else {
-            setUser(firebaseUser);
+            setUser({ ...firebaseUser, role });
           }
           setLoading(false);
         }, (error) => {
           console.error("Error listening to user doc:", error);
-          setUser(firebaseUser);
+          setUser({ ...firebaseUser, role });
           setLoading(false);
         });
       } else {

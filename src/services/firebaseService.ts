@@ -1,4 +1,4 @@
-import { db, handleFirestoreError, OperationType, storage } from '../firebase';
+import { db, handleFirestoreError, OperationType, storage, reportFirestoreError } from '../firebase';
 import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, query, where, onSnapshot, addDoc, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { User, FavoriteExercise, WorkoutTemplate, Testimonial } from '../types';
@@ -107,7 +107,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -117,7 +117,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -180,8 +180,21 @@ export const firebaseService = {
     const path = 'users';
     try {
       const newClientRef = doc(collection(db, path));
+      const rawPassword = data.password || 'speedfit123';
+      
+      // Hash the password securely using SHA-256
+      const msgBuffer = new TextEncoder().encode(rawPassword);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const passwordHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+      // Create secure data clone without plaintext password
+      const secureData = { ...data };
+      delete secureData.password;
+
       await setDoc(newClientRef, {
-        ...data,
+        ...secureData,
+        passwordHash,
         uid: newClientRef.id,
         role: 'CLIENT',
         onboardingCompleted: false,
@@ -203,7 +216,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -236,7 +249,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -269,7 +282,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -302,7 +315,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -336,7 +349,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -346,7 +359,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -356,7 +369,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -366,7 +379,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -404,7 +417,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -445,7 +458,7 @@ export const firebaseService = {
     return onSnapshot(collection(db, path), (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -465,7 +478,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -475,7 +488,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -604,7 +617,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.length > 0 ? { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } : null);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -615,7 +628,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -624,7 +637,7 @@ export const firebaseService = {
     return onSnapshot(collection(db, path), (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -658,7 +671,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -667,7 +680,7 @@ export const firebaseService = {
     return onSnapshot(collection(db, path), (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -742,7 +755,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -804,7 +817,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -837,7 +850,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkoutTemplate)));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -871,7 +884,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.length > 0 ? { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } : null);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -896,7 +909,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.length > 0 ? { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } : null);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 
@@ -921,7 +934,7 @@ export const firebaseService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Testimonial)));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      reportFirestoreError(error, OperationType.LIST, path);
     });
   },
 

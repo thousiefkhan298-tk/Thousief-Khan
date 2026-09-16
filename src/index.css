@@ -135,7 +135,7 @@ html.theme-monochrome [class*="border-red-500/"] {
 
 @layer base {
   body {
-    background-color: #0d0d0f !important;
+    background-color: #151518 !important;
     background-image: 
       linear-gradient(rgba(230, 0, 0, 0.015) 1px, transparent 1px), 
       linear-gradient(90deg, rgba(230, 0, 0, 0.015) 1px, transparent 1px) !important;
@@ -198,6 +198,17 @@ html.theme-monochrome [class*="border-red-500/"] {
     box-shadow: 0 0 10px rgba(230, 0, 0, 0.25);
   }
 
+  /* Prevent browser autofill from turning inputs blue/white with black text on desktop */
+  .input-field:-webkit-autofill,
+  .input-field:-webkit-autofill:hover, 
+  .input-field:-webkit-autofill:focus, 
+  .input-field:-webkit-autofill:active {
+    -webkit-text-fill-color: #ffffff !important;
+    -webkit-box-shadow: 0 0 0 1000px #141417 inset !important;
+    box-shadow: 0 0 0 1000px #141417 inset !important;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+
   .btn-primary {
     width: 100%;
     background-color: #e60000 !important;
@@ -224,7 +235,7 @@ html.theme-monochrome [class*="border-red-500/"] {
 
 /* Global resets for Charcoal Black background, white text, and red highlights */
 body, html, #root {
-  background-color: #0d0d0f !important;
+  background-color: #151518 !important;
   color: #f1f5f9 !important;
 }
 
@@ -236,7 +247,7 @@ body, html, #root {
 
 /* Elite Red, Black, and White Theme Overrides */
 .client-red-black {
-  background-color: #0d0d0f !important;
+  background-color: #151518 !important;
   color: #f1f5f9 !important;
 }
 
@@ -271,7 +282,7 @@ body, html, #root {
 /* Give explicit black items dedicated priorities */
 .client-red-black .bg-black,
 .client-red-black .bg-brand-dark {
-  background-color: #0d0d0f !important;
+  background-color: #151518 !important;
 }
 
 /* Override all solid black texts (used in light cards) to clean crisp white */
@@ -341,7 +352,7 @@ input:focus, textarea:focus, select:focus {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0d0d0f !important;
+  background: #151518 !important;
 }
 ::-webkit-scrollbar-thumb {
   background: #1e1e24 !important;
@@ -422,7 +433,7 @@ input:focus, textarea:focus, select:focus {
 }
 
 body:has(.trainer-dark-theme), html:has(.trainer-dark-theme), #root:has(.trainer-dark-theme), .trainer-dark-theme .client-red-black {
-  background-color: #0d0d0f !important;
+  background-color: #151518 !important;
   color: #f1f5f9 !important;
 }
 
@@ -430,26 +441,48 @@ body:has(.trainer-dark-theme), html:has(.trainer-dark-theme), #root:has(.trainer
    TRAINER DASHBOARD RED, WHITE, CHARCOAL, BLACK PREMIUM THEME
    ========================================================================== */
 
-/* 1. Global Page Background (Pure Black base) */
+/* 1. Global Page Background (Premium Charcoal Black base) */
 body:has(.trainer-dark-theme),
 .trainer-dark-theme {
-  background-color: #000000 !important;
+  background-color: #151518 !important;
   color: #f8fafc !important;
 }
 
-/* 2. Main Area (Deepest Premium Black with fine micro-grid) */
-.trainer-dark-theme main {
-  background-color: #020202 !important;
+/* Hardcoded dark utility backgrounds overridden to Charcoal Black under trainer-dark-theme */
+.trainer-dark-theme .bg-\[\#111111\],
+.trainer-dark-theme .bg-\[\#121214\],
+.trainer-dark-theme div.bg-\[\#111111\],
+.trainer-dark-theme div.bg-\[\#121214\],
+.trainer-dark-theme div[class*="bg-\[\#111111\]"],
+.trainer-dark-theme div[class*="bg-\[\#121214\]"] {
+  background-color: #151518 !important;
+}
+
+.trainer-dark-theme .bg-\[\#111111\]\/90,
+.trainer-dark-theme header.bg-\[\#111111\]\/90 {
+  background-color: rgba(21, 21, 24, 0.9) !important;
+}
+
+.trainer-dark-theme .bg-\[\#1B1B1B\],
+.trainer-dark-theme aside.bg-\[\#111111\],
+.trainer-dark-theme aside[class*="bg-\[\#111111\]"] {
+  background-color: #1b1b1f !important;
+}
+
+/* 2. Main Area (Deepest Premium Charcoal Black with fine micro-grid) */
+.trainer-dark-theme main,
+.trainer-dark-theme main.bg-\[\#111111\] {
+  background-color: #111113 !important;
   background-image: 
-    linear-gradient(rgba(230, 0, 0, 0.012) 1px, transparent 1px), 
-    linear-gradient(90deg, rgba(230, 0, 0, 0.012) 1px, transparent 1px) !important;
+    linear-gradient(rgba(230, 0, 0, 0.015) 1px, transparent 1px), 
+    linear-gradient(90deg, rgba(230, 0, 0, 0.015) 1px, transparent 1px) !important;
   background-size: 40px 40px !important;
   background-repeat: repeat !important;
 }
 
-/* 3. Professional Sidebar: Pure Solid Black, Red Right Accent Line */
+/* 3. Professional Sidebar: Solid Premium Charcoal Black, Red Right Accent Line */
 .trainer-dark-theme aside {
-  background-color: #050507 !important;
+  background-color: #1b1b1f !important;
   border-right: 2px solid #e60000 !important;
 }
 
@@ -478,20 +511,24 @@ body:has(.trainer-dark-theme),
   font-weight: 900 !important;
 }
 
-/* 4. THE WHITEBOARDS: High-Priority Custom White Cards (White, Charcoal text, Red Border Accent) */
+/* 4. THE ATHLETIC DARKBOARDS: High-Priority Custom Charcoal Cards (Charcoal, White text, Red Border Accent) */
 .trainer-dark-theme .bg-white,
 .trainer-dark-theme .bg-white.shadow-sm,
 .trainer-dark-theme .bg-white.p-6,
-.trainer-dark-theme .bg-white.p-5 {
-  background-color: #141417 !important;
-  color: #ffffff !important;
-  border: 1px solid #1e1e24 !important;
+.trainer-dark-theme .bg-white.p-5,
+.trainer-dark-theme .bg-\[\#141417\],
+.trainer-dark-theme .bg-\[\#0D0D0F\],
+.trainer-dark-theme .bg-\[\#0d0d0f\] {
+  background-color: #141417 !important; /* Luxurious Dark Charcoal Card */
+  color: #ffffff !important; /* Clean White text */
+  border: 1px solid #262630 !important; /* Subtle dark border */
   border-left: 6px solid #e60000 !important; /* Thick red bold athletic margin tag */
-  box-shadow: 0 12px 36px -8px rgba(0, 0, 0, 0.4) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.35), 0 8px 10px -6px rgba(0, 0, 0, 0.35) !important;
   border-radius: 24px !important;
 }
 
-/* Ensure all textual elements inside white cards render clean white/silver-charcoal */
+/* Ensure all textual elements inside cards render clean White/Silver */
+.trainer-dark-theme .bg-white h1,
 .trainer-dark-theme .bg-white h2,
 .trainer-dark-theme .bg-white h3,
 .trainer-dark-theme .bg-white h4,
@@ -503,27 +540,58 @@ body:has(.trainer-dark-theme),
 .trainer-dark-theme .bg-white option,
 .trainer-dark-theme .bg-white input,
 .trainer-dark-theme .bg-white textarea,
-.trainer-dark-theme .bg-white button:not(.bg-brand-red):not(.bg-emerald-500):not(.bg-rose-500):not(.bg-red-600),
 .trainer-dark-theme .bg-white li,
 .trainer-dark-theme .bg-white .text-\[\#0F172A\],
 .trainer-dark-theme .bg-white .text-\[\#0f172a\],
 .trainer-dark-theme .bg-white .text-slate-900,
 .trainer-dark-theme .bg-white .text-neutral-900,
 .trainer-dark-theme .bg-white .text-zinc-900,
-.trainer-dark-theme .bg-white .text-slate-800 {
-  color: #f1f5f9 !important;
+.trainer-dark-theme .bg-white .text-slate-800,
+.trainer-dark-theme .bg-\[\#141417\] h1,
+.trainer-dark-theme .bg-\[\#141417\] h2,
+.trainer-dark-theme .bg-\[\#141417\] h3,
+.trainer-dark-theme .bg-\[\#141417\] h4,
+.trainer-dark-theme .bg-\[\#141417\] h5,
+.trainer-dark-theme .bg-\[\#141417\] p,
+.trainer-dark-theme .bg-\[\#141417\] span,
+.trainer-dark-theme .bg-\[\#141417\] label,
+.trainer-dark-theme .bg-\[\#141417\] select,
+.trainer-dark-theme .bg-\[\#141417\] input,
+.trainer-dark-theme .bg-\[\#141417\] textarea,
+.trainer-dark-theme .bg-\[\#141417\] li,
+.trainer-dark-theme .bg-\[\#141417\] .text-\[\#0F172A\],
+.trainer-dark-theme .bg-\[\#141417\] .text-slate-900,
+.trainer-dark-theme .bg-\[\#0D0D0F\] h1,
+.trainer-dark-theme .bg-\[\#0D0D0F\] h2,
+.trainer-dark-theme .bg-\[\#0D0D0F\] h3,
+.trainer-dark-theme .bg-\[\#0D0D0F\] h4,
+.trainer-dark-theme .bg-\[\#0D0D0F\] p,
+.trainer-dark-theme .bg-\[\#0D0D0F\] span,
+.trainer-dark-theme .bg-\[\#0D0D0F\] label {
+  color: #ffffff !important; /* Elegant high-contrast white text for dark panels */
 }
 
-/* Subheadings and labels on whiteboard cards are deep charcoal gray */
+/* Subheadings and labels on cards are slate gray */
 .trainer-dark-theme .bg-white p.text-neutral-400,
 .trainer-dark-theme .bg-white p.text-slate-400,
 .trainer-dark-theme .bg-white span.text-neutral-400,
 .trainer-dark-theme .bg-white .text-\[\#64748B\],
-.trainer-dark-theme .bg-white .text-\[\#64748b\] {
-  color: #475569 !important; /* Elegant charcoal-slate */
+.trainer-dark-theme .bg-white .text-\[\#64748b\],
+.trainer-dark-theme .bg-white .text-gray-400,
+.trainer-dark-theme .bg-white .text-neutral-400,
+.trainer-dark-theme .bg-white .text-\[\#A1A1AA\],
+.trainer-dark-theme .bg-white .text-\[\#a1a1aa\],
+.trainer-dark-theme .bg-\[\#141417\] p.text-neutral-400,
+.trainer-dark-theme .bg-\[\#141417\] p.text-slate-400,
+.trainer-dark-theme .bg-\[\#141417\] span.text-neutral-400,
+.trainer-dark-theme .bg-\[\#141417\] .text-gray-400,
+.trainer-dark-theme .bg-\[\#141417\] .text-neutral-400,
+.trainer-dark-theme .bg-\[\#141417\] .text-\[\#A1A1AA\],
+.trainer-dark-theme .bg-\[\#141417\] .text-\[\#a1a1aa\] {
+  color: #a1a1aa !important; /* Elegant slate grey subtext */
 }
 
-/* Background list items and detail rows inside White cards should be light silver-charcoal grey */
+/* Background list items and detail rows inside cards should be dark charcoal grey */
 .trainer-dark-theme .bg-white .bg-slate-50,
 .trainer-dark-theme .bg-white .bg-neutral-50,
 .trainer-dark-theme .bg-white .bg-zinc-50,
@@ -533,36 +601,58 @@ body:has(.trainer-dark-theme),
 .trainer-dark-theme .bg-white .bg-\[\#F1F5F9\],
 .trainer-dark-theme .bg-white .bg-\[\#f1f5f9\],
 .trainer-dark-theme .bg-white div[class*="bg-slate-50"],
-.trainer-dark-theme .bg-white div[class*="bg-slate-100"] {
-  background-color: #f1f5f9 !important;
-  color: #0f172a !important;
-  border: 1px solid #e2e8f0 !important;
+.trainer-dark-theme .bg-white div[class*="bg-slate-100"],
+.trainer-dark-theme .bg-\[\#141417\] .bg-slate-50,
+.trainer-dark-theme .bg-\[\#141417\] .bg-neutral-50,
+.trainer-dark-theme .bg-\[\#141417\] .bg-\[\#F1F5F9\],
+.trainer-dark-theme .bg-\[\#141417\] .bg-\[\#f1f5f9\],
+.trainer-dark-theme .bg-\[\#141417\] div[class*="bg-slate-50"],
+.trainer-dark-theme .bg-\[\#141417\] div[class*="bg-slate-100"],
+.trainer-dark-theme .bg-\[\#0D0D0F\] .bg-\[\#0e0e11\] {
+  background-color: #1e1e24 !important; /* Soft deep gray secondary block */
+  color: #ffffff !important;
+  border: 1px solid #2d2d39 !important;
 }
 
-/* Forms structure inside clean whiteboard templates */
+/* Ensure child tags inside nested rows are also properly colored */
+.trainer-dark-theme .bg-white .bg-slate-50 *,
+.trainer-dark-theme .bg-white .bg-\[\#F1F5F9\] *,
+.trainer-dark-theme .bg-\[\#141417\] .bg-slate-50 *,
+.trainer-dark-theme .bg-\[\#141417\] .bg-\[\#F1F5F9\] * {
+  color: #ffffff !important;
+}
+
+/* Forms structure inside clean templates */
 .trainer-dark-theme .bg-white input,
 .trainer-dark-theme .bg-white select,
-.trainer-dark-theme .bg-white textarea {
-  background-color: #ffffff !important;
-  border: 1.5px solid #cbd5e1 !important;
-  color: #0f172a !important;
+.trainer-dark-theme .bg-white textarea,
+.trainer-dark-theme .bg-\[\#141417\] input,
+.trainer-dark-theme .bg-\[\#141417\] select,
+.trainer-dark-theme .bg-\[\#141417\] textarea {
+  background-color: #0d0d0f !important;
+  border: 1.5px solid #2a2a35 !important;
+  color: #ffffff !important;
 }
 
 .trainer-dark-theme .bg-white input:focus,
 .trainer-dark-theme .bg-white select:focus,
-.trainer-dark-theme .bg-white textarea:focus {
+.trainer-dark-theme .bg-white textarea:focus,
+.trainer-dark-theme .bg-\[\#141417\] input:focus,
+.trainer-dark-theme .bg-\[\#141417\] select:focus,
+.trainer-dark-theme .bg-\[\#141417\] textarea:focus {
   border-color: #e60000 !important;
   box-shadow: 0 0 10px rgba(230, 0, 0, 0.15) !important;
 }
 
 /* Modal overlays on the trainer panel */
 .trainer-dark-theme div[class*="fixed"] div[class*="bg-white"],
-.trainer-dark-theme div[class*="fixed"] .bg-white {
-  background-color: #ffffff !important;
+.trainer-dark-theme div[class*="fixed"] .bg-white,
+.trainer-dark-theme div[class*="fixed"] .bg-\[\#141417\] {
+  background-color: #141417 !important;
   border: 3px solid #e60000 !important;
-  color: #0f172a !important;
+  color: #ffffff !important;
   border-radius: 24px !important;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7) !important;
 }
 
 /* 5. THE CHARCOALS: Secondary Metrics and Background Cards */
@@ -571,11 +661,11 @@ body:has(.trainer-dark-theme),
 .trainer-dark-theme .bg-slate-900,
 .trainer-dark-theme .bg-neutral-900.border,
 .trainer-dark-theme div[class*="bg-neutral-900"] {
-  background-color: #121214 !important; /* Dark High-Contrast Charcoal background */
-  color: #f8fafc !important;
-  border: 1px solid #1e1e24 !important;
+  background-color: #1e1e22 !important; /* Rich Dark Charcoal background */
+  color: #ffffff !important;
+  border: 1px solid #2e2e34 !important;
   border-left: 4px solid #e60000 !important; /* Fine details tag */
-  box-shadow: 0 6px 20px -5px rgba(0, 0, 0, 0.4) !important;
+  box-shadow: 0 6px 20px -5px rgba(0, 0, 0, 0.2) !important;
   border-radius: 20px !important;
 }
 
@@ -592,15 +682,12 @@ body:has(.trainer-dark-theme),
 }
 
 /* Special High-Power Laser Red numbers inside charcoal cards */
-.trainer-dark-theme .bg-neutral-900 .text-brand-red {
-  color: #ff3b30 !important;
-}
-
-/* 6. RED ACCENTS: Vibrant primary triggers */
+.trainer-dark-theme .bg-neutral-900 .text-brand-red,
 .trainer-dark-theme .text-brand-red {
   color: #e60000 !important;
 }
 
+/* 6. RED ACCENTS: Vibrant primary triggers */
 .trainer-dark-theme .text-rose-500 {
   color: #f43f5e !important;
 }
@@ -638,13 +725,13 @@ body:has(.trainer-dark-theme),
   transform: scale(0.96) !important;
 }
 
-/* Special Switch/Selector components inside clean whiteboard frames */
+/* Special Switch/Selector components inside clean templates */
 .trainer-dark-theme .bg-\[\#F1F5F9\],
 .trainer-dark-theme .bg-\[\#f1f5f9\],
 .trainer-dark-theme .bg-\[\#F1F5F9\].p-0\.5,
 .trainer-dark-theme .bg-\[\#f1f5f9\].p-0\.5 {
-  background-color: #131316 !important;
-  border: 1px solid #1e1e24 !important;
+  background-color: #f4f4f5 !important;
+  border: 1px solid #e4e4e7 !important;
   border-radius: 10px !important;
 }
 
@@ -655,7 +742,8 @@ body:has(.trainer-dark-theme),
 
 .trainer-dark-theme .bg-\[\#F1F5F9\] button.bg-white,
 .trainer-dark-theme .bg-\[\#f1f5f9\] button.bg-white {
-  background-color: #212124 !important;
-  color: #ffffff !important;
+  background-color: #ffffff !important;
+  color: #1a1a1e !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
   border-radius: 8px !important;
 }

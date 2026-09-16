@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { claimPlaceholderAccount } from '../../services/accountLinking';
 import { auth, db, handleFirestoreError, OperationType } from '../../firebase.js';
 import { ArrowRight, Zap } from 'lucide-react';
 
@@ -37,80 +38,13 @@ const SignupPage: React.FC = () => {
       const path = `users/${uid}`;
       
       try {
-        let existingData: any = {};
-        let oldDocId: string | null = null;
-        let oldRef: any = null;
-
-        // Try to locate pre-existing profile or trainer invitation with matching email
-        try {
-          const q = query(collection(db, 'users'), where('email', '==', email.toLowerCase().trim()));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            oldDocId = snap.docs[0].id;
-            oldRef = snap.docs[0].ref;
-            existingData = snap.docs[0].data();
-            console.log("Pre-existing invitation or profile found for this email address. Syncing existing records.");
-          }
-        } catch (findErr) {
-          console.warn("Could not check for pre-existing profiles:", findErr);
-        }
-
-        await setDoc(doc(db, 'users', uid), {
-          ...existingData,
-          uid: uid,
-          email,
-          name: name || existingData.name || '',
+        await claimPlaceholderAccount(uid, email, {
+          name: name || '',
           role,
-          trainerId: trainerIdFromUrl || existingData.trainerId || null,
-          onboardingCompleted: existingData.onboardingCompleted !== undefined ? existingData.onboardingCompleted : (role === 'TRAINER'),
-          createdAt: existingData.createdAt || new Date().toISOString()
+          trainerId: trainerIdFromUrl || null,
+          onboardingCompleted: role === 'TRAINER',
+          createdAt: new Date().toISOString()
         });
-
-        // Migrate sub-collections from old transient document ID to the authenticated UID
-        if (oldDocId && oldDocId !== uid) {
-          const collectionsToMigrate = [
-            'workoutLogs',
-            'trainerNotes',
-            'workoutPlans',
-            'attendance',
-            'rescheduleRequests',
-            'sessions',
-            'dietPlans',
-            'pendingDrafts',
-            'paymentRecords',
-            'progressPhotos',
-            'scheduledWorkouts'
-          ];
-
-          for (const colName of collectionsToMigrate) {
-            try {
-              const subQ = query(collection(db, colName), where('clientId', '==', oldDocId));
-              const subSnap = await getDocs(subQ);
-              for (const subDoc of subSnap.docs) {
-                await updateDoc(subDoc.ref, { clientId: uid });
-              }
-            } catch (e) {
-              console.warn(`Error migrating subcollection ${colName} during signup:`, e);
-            }
-          }
-
-          // Migrate favorites specifically which has 'uid' instead of 'clientId'
-          try {
-            const favQ = query(collection(db, 'favorites'), where('uid', '==', oldDocId));
-            const favSnap = await getDocs(favQ);
-            for (const favDoc of favSnap.docs) {
-              await updateDoc(favDoc.ref, { uid: uid });
-            }
-          } catch (e) {
-            console.warn("Error migrating favorites during signup:", e);
-          }
-
-          // Mark transition in old document and hide it
-          await updateDoc(oldRef, {
-            isMigrated: true,
-            migratedTo: uid
-          });
-        }
       } catch (firestoreErr: any) {
         console.error("Firestore error during signup:", firestoreErr);
         handleFirestoreError(firestoreErr, OperationType.CREATE, path);
@@ -159,17 +93,17 @@ const SignupPage: React.FC = () => {
           </div>
           <div className="flex items-center space-x-4 w-full">
             <div className="h-[1px] flex-1 bg-brand-red/30"></div>
-            <span className="text-[10px] font-mono uppercase tracking-[0.3em] text-neutral-50 font-bold">BUILD TO TRANSFORMATION</span>
+            <span className="text-[10px] font-mono uppercase tracking-[0.3em] text-white font-bold">BUILD TO TRANSFORMATION</span>
             <div className="h-[1px] flex-1 bg-brand-red/30"></div>
           </div>
         </div>
 
-        <div className="bg-neutral-800/50 backdrop-blur-xl p-10 rounded-[2.5rem] border border-neutral-700 shadow-2xl">
+        <div className="bg-[#121214]/95 backdrop-blur-xl p-10 rounded-[2.5rem] border border-[#2A2A2A] shadow-2xl">
           <div className="mb-10 text-center">
             <h1 className="text-5xl font-display italic uppercase leading-[1.1] mb-2 text-white">
               Join <span className="text-brand-red">Now</span>
             </h1>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-50 font-bold">New Client Registration</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#A1A1AA] font-bold">New Client Registration</p>
           </div>
 
           {error && (
@@ -180,7 +114,7 @@ const SignupPage: React.FC = () => {
 
           <form onSubmit={handleEmailSignup} className="space-y-6 mb-6">
             <div className="relative">
-              <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-50 font-bold mb-3 ml-1">Full Name</label>
+              <label className="block text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA] font-bold mb-3 ml-1">Full Name</label>
               <input
                 type="text"
                 required
@@ -192,7 +126,7 @@ const SignupPage: React.FC = () => {
             </div>
 
             <div className="relative">
-              <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-50 font-bold mb-3 ml-1">Identity (Email)</label>
+              <label className="block text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA] font-bold mb-3 ml-1">Identity (Email)</label>
               <input
                 type="email"
                 required
@@ -204,7 +138,7 @@ const SignupPage: React.FC = () => {
             </div>
 
             <div className="relative">
-              <label className="block text-[10px] font-mono uppercase tracking-widest text-neutral-50 font-bold mb-3 ml-1">Secret (Password)</label>
+              <label className="block text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA] font-bold mb-3 ml-1">Secret (Password)</label>
               <input
                 type="password"
                 required
@@ -225,7 +159,7 @@ const SignupPage: React.FC = () => {
             </button>
           </form>
 
-          <div className="mt-10 pt-8 border-t border-neutral-700 text-center">
+          <div className="mt-10 pt-8 border-t border-[#2A2A2A] text-center">
             <p className="text-white font-bold text-xs font-mono uppercase tracking-wider">
               Already Registered?{' '}
               <Link to="/login" className="text-brand-red font-bold hover:text-red-400 transition-colors">

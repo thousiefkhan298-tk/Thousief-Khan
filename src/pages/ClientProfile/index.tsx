@@ -393,22 +393,24 @@ const ClientProfile: React.FC = () => {
     }
   };
 
-  const handleSavePlan = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSavePlan = async (e: React.FormEvent, publishImmediately: boolean = true) => {
+    e?.preventDefault?.();
     if (!id || planSections.length === 0 || isSavingPlan) return;
 
     setIsSavingPlan(true);
     try {
       const now = new Date().toISOString();
       const existingPlan = editingPlanId ? workoutPlans.find(p => p.id === editingPlanId) : null;
+      const isApproved = publishImmediately || (existingPlan ? (existingPlan.approved ?? true) : true);
+      
       const planData = {
         id: editingPlanId || undefined,
         clientId: id,
         sections: planSections.filter(s => s.title.trim() || s.content.trim()),
         updatedAt: now,
         isArchived: false,
-        approved: existingPlan ? (existingPlan.approved ?? false) : false,
-        approvalStatus: existingPlan ? (existingPlan.approvalStatus ?? 'draft') : 'draft'
+        approved: isApproved,
+        approvalStatus: isApproved ? 'ready' : 'draft'
       };
       
       await firebaseService.saveWorkoutPlan(planData);
@@ -416,6 +418,7 @@ const ClientProfile: React.FC = () => {
       setShowPlanForm(false);
       setEditingPlanId(null);
       setPlanSections([{ title: '', content: '' }]);
+      alert(isApproved ? "Workout blueprint saved & published to client profile!" : "Workout plan saved as draft.");
     } catch (error) {
       console.error("Error saving workout plan:", error);
       alert("Failed to save workout plan.");
@@ -434,22 +437,24 @@ const ClientProfile: React.FC = () => {
     }
   };
 
-  const handleSaveDietPlan = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveDietPlan = async (e: React.FormEvent, publishImmediately: boolean = true) => {
+    e?.preventDefault?.();
     if (!id || dietSections.length === 0 || isSavingDiet) return;
 
     setIsSavingDiet(true);
     try {
       const now = new Date().toISOString();
       const existingPlan = editingDietId ? dietPlans.find(p => p.id === editingDietId) : null;
+      const isApproved = publishImmediately || (existingPlan ? (existingPlan.approved ?? true) : true);
+      
       const planData = {
         id: editingDietId || undefined,
         clientId: id,
         sections: dietSections.filter(s => s.title.trim() || s.content.trim()),
         updatedAt: now,
         isArchived: false,
-        approved: existingPlan ? (existingPlan.approved ?? false) : false,
-        approvalStatus: existingPlan ? (existingPlan.approvalStatus ?? 'draft') : 'draft'
+        approved: isApproved,
+        approvalStatus: isApproved ? 'ready' : 'draft'
       };
       
       await firebaseService.saveDietPlan(planData);
@@ -457,6 +462,7 @@ const ClientProfile: React.FC = () => {
       setShowDietForm(false);
       setEditingDietId(null);
       setDietSections([{ title: '', content: '' }]);
+      alert(isApproved ? "Diet schedule saved & published to client profile!" : "Diet plan saved as draft.");
     } catch (error) {
       console.error("Error saving diet plan:", error);
       alert("Failed to save diet plan.");
@@ -1224,11 +1230,20 @@ const ClientProfile: React.FC = () => {
                         Cancel
                       </button>
                       <button
-                        type="submit"
+                        type="button"
+                        onClick={(e) => handleSavePlan(e, false)}
                         disabled={isSavingPlan}
-                        className="bg-white text-black px-6 py-2.5 rounded-xl font-mono text-[10px] font-black uppercase tracking-widest hover:bg-neutral-200"
+                        className="bg-neutral-800 text-neutral-300 px-4 py-2.5 rounded-xl font-mono text-[10px] font-bold uppercase tracking-wider hover:bg-neutral-700 hover:text-white"
                       >
-                        {isSavingPlan ? 'Saving...' : 'Save Plan'}
+                        Save as Draft
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleSavePlan(e, true)}
+                        disabled={isSavingPlan}
+                        className="bg-brand-red text-white px-6 py-2.5 rounded-xl font-mono text-[10px] font-black uppercase tracking-widest hover:bg-neutral-100 hover:text-black transition-all shadow-[0_0_15px_rgba(255,0,0,0.3)]"
+                      >
+                        {isSavingPlan ? 'Publishing...' : 'Save & Publish to Client'}
                       </button>
                     </div>
                   </form>
@@ -1440,11 +1455,20 @@ const ClientProfile: React.FC = () => {
                         Cancel
                       </button>
                       <button
-                        type="submit"
+                        type="button"
+                        onClick={(e) => handleSaveDietPlan(e, false)}
                         disabled={isSavingDiet}
-                        className="bg-white text-black px-6 py-2.5 rounded-xl font-mono text-[10px] font-black uppercase tracking-widest hover:bg-neutral-200"
+                        className="bg-neutral-800 text-neutral-300 px-4 py-2.5 rounded-xl font-mono text-[10px] font-bold uppercase tracking-wider hover:bg-neutral-700 hover:text-white"
                       >
-                        {isSavingDiet ? 'Saving...' : 'Save Plan'}
+                        Save as Draft
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleSaveDietPlan(e, true)}
+                        disabled={isSavingDiet}
+                        className="bg-brand-red text-white px-6 py-2.5 rounded-xl font-mono text-[10px] font-black uppercase tracking-widest hover:bg-neutral-100 hover:text-black transition-all shadow-[0_0_15px_rgba(255,0,0,0.3)]"
+                      >
+                        {isSavingDiet ? 'Publishing...' : 'Save & Publish to Client'}
                       </button>
                     </div>
                   </form>

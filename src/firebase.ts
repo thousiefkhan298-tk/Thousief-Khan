@@ -27,10 +27,16 @@ export async function testFirebaseConnection() {
     console.log("Firebase connection test: Success (connected to Firestore)");
     return true;
   } catch (error: any) {
-    if (error.message?.includes('the client is offline')) {
-      console.error("Firebase connection test: FAILED - Client is offline. Check your Firebase configuration and network.");
+    const isOffline = 
+      error.code === 'unavailable' || 
+      error.message?.toLowerCase().includes('offline') || 
+      error.message?.toLowerCase().includes('unavailable') ||
+      error.message?.toLowerCase().includes('could not reach');
+      
+    if (isOffline) {
+      console.warn("Firebase connection test: Operating in Offline Cache Mode. Local edits will be stored and synchronized once connection is restored.");
     } else {
-      console.log("Firebase connection test: Success (reached server, even if doc doesn't exist)");
+      console.log("Firebase connection test: Handled connection status check successfully.");
     }
     return false;
   }
@@ -87,4 +93,12 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
+}
+
+export function reportFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  try {
+    handleFirestoreError(error, operationType, path);
+  } catch (err) {
+    console.error('Swallowed Firestore Error in listener:', err);
+  }
 }

@@ -11,6 +11,7 @@ import { useAllAttendance } from '../../hooks/useAllAttendance';
 import { useAllPayments } from '../../hooks/useAllPayments';
 import { useAllDietPlans } from '../../hooks/useAllDietPlans';
 import { useMessages } from '../../hooks/useMessages';
+import { reconcileClientAccounts } from '../../services/accountLinking';
 import { 
   Users, 
   ClipboardList, 
@@ -41,7 +42,8 @@ import {
   X,
   Info,
   Clock,
-  Sparkles
+  Sparkles,
+  Copy
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase.js';
@@ -51,9 +53,8 @@ import { motion } from 'motion/react';
 import VisualWorkoutModal from '../../components/VisualWorkoutModal.js';
 import { COMMON_EXERCISES } from '../../constants.js';
 import { downloadClientReport, exportPaidClientsReport, exportAllInvoicesReport, exportPaymentReceiptToPDF, exportAllClientsBookletToPDF, exportAttendanceReportToPDF } from '../../utils/pdfExporter.js';
-import { authorizeGoogleSheets, createGoogleSpreadsheet, updateSheetValues, getSheetValues } from '../../services/googleSheetsService.js';
 import { isGmailAuthorized, authorizeGmail, sendGmailEmail, clearGmailAuthorization } from '../../services/gmailService.js';
-import { isDriveAuthorized, authorizeDrive, listDriveFiles, uploadTextToDrive, clearDriveAuthorization, DriveFile } from '../../services/googleDriveService.js';
+import { GoogleCalendarIntegration } from '../../components/GoogleCalendarIntegration.js';
 
 
 // Helper functions for payment sums
@@ -109,49 +110,6 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
   const [showQuickPayment, setShowQuickPayment] = useState<string | null>(null);
   const [selectedClientSummary, setSelectedClientSummary] = useState<User | null>(null);
   
-  // Google Sheets integration states
-  const [sheetsSyncing, setSheetsSyncing] = useState<string | null>(null); // 'athletes' | 'payments'
-  const [sheetsError, setSheetsError] = useState<string | null>(null);
-  const [createdSpreadsheetUrl, setCreatedSpreadsheetUrl] = useState<string | null>(null);
-
-  // Google Sheets target configurations (persisted with Firestore if available)
-  const [athletesSheetChoice, setAthletesSheetChoice] = useState<'new' | 'existing'>(userData?.athletesSheetChoice || 'new');
-  const [athletesSpreadsheetInput, setAthletesSpreadsheetInput] = useState<string>(userData?.athletesSpreadsheetId || '');
-  const [athletesTabInput, setAthletesTabInput] = useState<string>(userData?.athletesTabInput || 'Athletes');
-
-  const [paymentsSheetChoice, setPaymentsSheetChoice] = useState<'new' | 'existing'>(userData?.paymentsSheetChoice || 'new');
-  const [paymentsSpreadsheetInput, setPaymentsSpreadsheetInput] = useState<string>(userData?.paymentsSpreadsheetId || '');
-  const [paymentsTabInput, setPaymentsTabInput] = useState<string>(userData?.paymentsTabInput || 'Payments');
-
-  const extractSpreadsheetId = (input: string): string => {
-    if (!input) return '';
-    const trimmed = input.trim();
-    const urlMatch = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9\-_]+)/);
-    if (urlMatch && urlMatch[1]) {
-      return urlMatch[1];
-    }
-    return trimmed;
-  };
-
-  // Gmail trainer states
-  const [gmailSyncing, setGmailSyncing] = useState<boolean>(false);
-  const [gmailError, setGmailError] = useState<string | null>(null);
-  const [gmailSuccess, setGmailSuccess] = useState<string | null>(null);
-  const [gmailAuthorized, setGmailAuthorized] = useState<boolean>(false);
-  const [trainerTargetEmail, setTrainerTargetEmail] = useState<string>('');
-  const [trainerEmailSubject, setTrainerEmailSubject] = useState<string>('Speed Fit Custom Workout Alert');
-  const [trainerEmailBody, setTrainerEmailBody] = useState<string>('Dear Athlete,\n\nI have successfully loaded a new custom progressive overload profile in your checking panel.\n\nPlease follow layout guidelines carefully.\n\nBest,\nCoach');
-  
-  // Google Drive trainer states
-  const [driveSyncing, setDriveSyncing] = useState<boolean>(false);
-  const [driveError, setDriveError] = useState<string | null>(null);
-  const [driveSuccess, setDriveSuccess] = useState<string | null>(null);
-  const [driveAuthorized, setDriveAuthorized] = useState<boolean>(false);
-  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
-  const [driveQuery, setDriveQuery] = useState<string>("Speed Fit");
-  const [trainerDriveFileName, setTrainerDriveFileName] = useState<string>('workout_plan_schedule.txt');
-  const [trainerDriveContent, setTrainerDriveContent] = useState<string>('SPEED FIT ATHLETE EXERCISE OUTLINE\n=================================\nTarget: Progressive overload routines\n\nDaily Workout Blueprint:\n- Split Squat: 3 sets x 12 reps\n- Flat Press: 3 sets x 10 reps\n- Lateral Pulls: 3 sets x 15 reps\n\nStrict hydration and logging scheduled entries required.');
-  
   // Testimonial modal states
   const [showTestimonialModal, setShowTestimonialModal] = useState(false);
   const [editingTestimonial, setEditingTestimonial] = useState<Testimonial | null>(null);
@@ -193,10 +151,13 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
   // Trainer Bio specifications form
   const [trainerBioForm, setTrainerBioForm] = useState({
+    name: userData?.name || '',
+    phoneNumber: userData?.phoneNumber || '',
     bio: userData?.bio || '',
     specialties: userData?.specialties || '',
     certifications: userData?.certifications || '',
     experience: userData?.experience || '',
+    photoURL: userData?.photoURL || userData?.avatar || '',
   });
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [copystate, setCopystate] = useState<Record<string, boolean>>({});
@@ -251,13 +212,33 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
   useEffect(() => {
     if (userData) {
       setTrainerBioForm({
+        name: userData.name || '',
+        phoneNumber: userData.phoneNumber || '',
         bio: userData.bio || '',
         specialties: userData.specialties || '',
         certifications: userData.certifications || '',
         experience: userData.experience || '',
+        photoURL: userData.photoURL || userData.avatar || '',
       });
     }
   }, [userData]);
+
+  // Reconcile and link client accounts when trainer is logged in
+  useEffect(() => {
+    if (userData?.uid) {
+      if (clients.length > 0) {
+        reconcileClientAccounts(clients, userData.uid);
+      } else {
+        const unsubscribe = firebaseService.subscribeToUsers((allUsers) => {
+          const clientList = allUsers.filter(u => u.role === 'CLIENT' || !u.role);
+          if (clientList.length > 0) {
+            reconcileClientAccounts(clientList, userData.uid);
+          }
+        });
+        return () => unsubscribe();
+      }
+    }
+  }, [clients, userData?.uid]);
 
   // Derived states
   const pendingReviews = useMemo(() => {
@@ -464,16 +445,19 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
     if (!newClientData.name || !newClientData.email) return;
 
     setIsAddingClient(true);
+    const assignedPassword = newClientData.password || 'speedfit123';
     try {
       await firebaseService.createClient({
         name: newClientData.name,
         email: newClientData.email.toLowerCase().trim(),
-        password: newClientData.password || 'speedfit123',
+        password: assignedPassword,
         trainerId: userData.uid
       });
       setNewClientData({ name: '', email: '', password: 'speedfit123' });
       setShowAddClientModal(false);
-      alert("Client added successfully!");
+      
+      // Beautiful, secure alert displaying the one-time temporary password
+      alert(`Athlete invited successfully!\n\nTemporary Login Password: ${assignedPassword}\n\nPlease share this password with the athlete. For security, the password has been hashed in the database and will never be shown again.`);
     } catch (error) {
       console.error(error);
       alert("Failed to add client.");
@@ -757,321 +741,14 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
     }
   };
 
-  const handleSyncAthletesToSheets = async () => {
-    setSheetsSyncing('athletes');
-    setSheetsError(null);
-    setCreatedSpreadsheetUrl(null);
-    try {
-      const token = await authorizeGoogleSheets();
-      
-      const headers = [
-        'Athlete Name', 
-        'Email', 
-        'Phone Number',
-        'Gender', 
-        'DOB/Birthdate',
-        'Address',
-        'Fitness Goals', 
-        'Height (cm)',
-        'Weight (kg)',
-        'Health Conditions',
-        'Total Paid (₹)',
-        'Pending Dues (₹)',
-        'Active Status', 
-        'Onboarding Status',
-        'Date Registered'
-      ];
-
-      const rows = clients.map((c: any) => {
-        const matchingPayments = paymentRecords.filter((p: any) => p.clientId === c.id);
-        const totalPaid = matchingPayments.filter((p: any) => p.status === 'Paid').reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0);
-        const pendingDues = matchingPayments.filter((p: any) => p.status === 'Pending' || p.status === 'Overdue').reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0);
-        
-        let dobStr = 'N/A';
-        if (c.clientDetails?.dob) {
-          dobStr = c.clientDetails.dob;
-        } else if (c.clientDetails?.age) {
-          dobStr = `Age: ${c.clientDetails.age}`;
-        }
-
-        const goalsList = Array.isArray(c.healthAssessment?.goals) 
-          ? c.healthAssessment.goals.join(', ') 
-          : (c.healthAssessment?.goals || 'N/A');
-
-        const healthConditions = Array.isArray(c.healthAssessment?.conditions)
-          ? c.healthAssessment.conditions.join(', ')
-          : (c.healthAssessment?.conditions || c.healthAssessment?.otherConditions || 'N/A');
-
-        return [
-          c.name || c.clientDetails?.fullName || 'N/A',
-          c.email || c.clientDetails?.email || 'N/A',
-          c.phoneNumber || c.clientDetails?.phoneNumber || 'N/A',
-          c.clientDetails?.gender || c.gender || 'N/A',
-          dobStr,
-          c.clientDetails?.address || 'N/A',
-          goalsList,
-          c.healthAssessment?.height || c.fitnessAssessment?.height || 'N/A',
-          c.healthAssessment?.weight || c.fitnessAssessment?.weight || 'N/A',
-          healthConditions,
-          totalPaid,
-          pendingDues,
-          c.isActive !== false ? 'ACTIVE' : 'INACTIVE',
-          c.onboardingCompleted ? 'COMPLETED' : 'PENDING',
-          c.createdAt ? new Date(c.createdAt).toLocaleDateString() : 'N/A'
-        ];
-      });
-
-      const values = [headers, ...rows];
-
-      let spreadsheetId = '';
-      let spreadsheetUrl = '';
-      const tabName = athletesTabInput.trim() || 'Athletes';
-
-      if (athletesSheetChoice === 'existing' && athletesSpreadsheetInput.trim()) {
-        spreadsheetId = extractSpreadsheetId(athletesSpreadsheetInput);
-        spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
-      } else {
-        const result = await createGoogleSpreadsheet(
-          'Speed Fit Athletes Ledger',
-          [tabName],
-          token
-        );
-        spreadsheetId = result.spreadsheetId;
-        spreadsheetUrl = result.spreadsheetUrl;
-        
-        setAthletesSpreadsheetInput(spreadsheetId);
-        if (userData?.uid) {
-          await firebaseService.updateUser(userData.uid, {
-            athletesSpreadsheetId: spreadsheetId,
-            athletesSheetChoice: 'existing',
-            athletesTabInput: tabName
-          }).catch(console.error);
-        }
-      }
-
-      await updateSheetValues(spreadsheetId, `${tabName}!A1`, values, token);
-      setCreatedSpreadsheetUrl(spreadsheetUrl);
-    } catch (err: any) {
-      console.error(err);
-      setSheetsError(err.message || 'Authorization or Sheets update failed.');
-    } finally {
-      setSheetsSyncing(null);
-    }
-  };
-
-  const handlePullAthletesFromSheets = async () => {
-    setSheetsSyncing('athletes-pull');
-    setSheetsError(null);
-    setCreatedSpreadsheetUrl(null);
-    try {
-      const spreadsheetId = extractSpreadsheetId(athletesSpreadsheetInput);
-      if (!spreadsheetId) {
-        throw new Error('Please enter a valid Google Spreadsheet URL or ID in the input box below.');
-      }
-
-      const token = await authorizeGoogleSheets();
-      const tabName = athletesTabInput.trim() || 'Athletes';
-
-      // Read columns up to 1000 rows
-      const values = await getSheetValues(spreadsheetId, `${tabName}!A1:O1000`, token);
-
-      if (!values || values.length <= 1) {
-        throw new Error(`No data found in your sheet tab "${tabName}". Please make sure the sheet is formatted and contains columns with data.`);
-      }
-
-      const headers = values[0].map((h: string) => (h || '').trim().toLowerCase());
-      
-      // Map columns dynamically by checking common header titles
-      let nameIdx = headers.findIndex(h => h.includes('name') || h.includes('athlete'));
-      let emailIdx = headers.findIndex(h => h.includes('email'));
-      let phoneIdx = headers.findIndex(h => h.includes('phone') || h.includes('mobile'));
-      let genderIdx = headers.findIndex(h => h.includes('gender') || h.includes('sex'));
-      let dobIdx = headers.findIndex(h => h.includes('dob') || h.includes('birth') || h.includes('birthday') || h.includes('age'));
-      let addressIdx = headers.findIndex(h => h.includes('address'));
-      let goalsIdx = headers.findIndex(h => h.includes('goals') || h.includes('fitness goals'));
-      let heightIdx = headers.findIndex(h => h.includes('height'));
-      let weightIdx = headers.findIndex(h => h.includes('weight'));
-      let conditionsIdx = headers.findIndex(h => h.includes('condition') || h.includes('health'));
-      let statusIdx = headers.findIndex(h => h.includes('active') || h.includes('status'));
-
-      // If headers aren't explicitly matched, fallback to predicted indices based on standard export layout
-      if (nameIdx === -1) nameIdx = 0;
-      if (emailIdx === -1) emailIdx = 1;
-      if (phoneIdx === -1) phoneIdx = 2;
-      if (genderIdx === -1) genderIdx = 3;
-      if (dobIdx === -1) dobIdx = 4;
-      if (addressIdx === -1) addressIdx = 5;
-      if (goalsIdx === -1) goalsIdx = 6;
-      if (heightIdx === -1) heightIdx = 7;
-      if (weightIdx === -1) weightIdx = 8;
-      if (conditionsIdx === -1) conditionsIdx = 9;
-      if (statusIdx === -1) statusIdx = 12;
-
-      let createdCount = 0;
-      let updatedCount = 0;
-
-      for (let i = 1; i < values.length; i++) {
-        const row = values[i];
-        if (!row || row.length === 0) continue;
-
-        const name = (row[nameIdx] || '').trim();
-        const email = (row[emailIdx] || '').trim().toLowerCase();
-
-        if (!name || !email) continue;
-
-        const phoneNumber = row[phoneIdx] || '';
-        const gender = (row[genderIdx] || 'male').trim().toLowerCase();
-        const dobStr = row[dobIdx] || '';
-        const address = row[addressIdx] || '';
-        const goals = row[goalsIdx] ? row[goalsIdx].split(',').map((g: string) => g.trim()).filter(Boolean) : [];
-        const height = row[heightIdx] || '';
-        const weight = row[weightIdx] || '';
-        const conditions = row[conditionsIdx] ? row[conditionsIdx].split(',').map((c: string) => c.trim()).filter(Boolean) : [];
-        const isActive = row[statusIdx] ? row[statusIdx].trim().toUpperCase() !== 'INACTIVE' : true;
-
-        const clientDetails = {
-          fullName: name,
-          dob: dobStr,
-          gender: gender,
-          phoneNumber: phoneNumber,
-          email: email,
-          address: address,
-          age: dobStr.startsWith('Age:') ? dobStr.replace('Age:', '').trim() : '',
-          emergencyContact: ''
-        };
-
-        const healthAssessment = {
-          conditions: conditions,
-          otherConditions: '',
-          smoking: false,
-          alcohol: false,
-          stress: 'Moderate' as const,
-          occupation: 'Active' as const,
-          sleepHours: '8',
-          currentlyActive: true,
-          pastExperience: '',
-          trainingDaysPerWeek: '4',
-          goals: goals,
-          height: height,
-          weight: weight,
-          waist: '',
-          painActivities: [],
-          medications: '',
-          confirmed: true,
-          consentGiven: true
-        };
-
-        const updatedFields = {
-          name,
-          email,
-          phoneNumber,
-          gender,
-          isActive,
-          clientDetails,
-          healthAssessment,
-          updatedFromSheetsAt: new Date().toISOString()
-        };
-
-        const existingClient = clients.find((c: any) => c.email?.trim().toLowerCase() === email);
-
-        if (existingClient) {
-          await firebaseService.updateUser(existingClient.id, updatedFields);
-          updatedCount++;
-        } else {
-          const newId = await firebaseService.createClient({
-            name,
-            email,
-            trainerId: userData.uid
-          });
-          if (newId) {
-            await firebaseService.updateUser(newId, updatedFields);
-            createdCount++;
-          }
-        }
-      }
-
-      alert(`Successfully pulled and synchronized with Google Sheets!\n- Imported ${createdCount} new athletes.\n- Updated ${updatedCount} existing records.\nThese records are now saved locally for offline use.`);
-      setCreatedSpreadsheetUrl(`https://docs.google.com/spreadsheets/d/${spreadsheetId}`);
-    } catch (err: any) {
-      console.error(err);
-      setSheetsError(err.message || 'Failed to pull data from Google Sheet. Please confirm sheet formatting and Try Again.');
-    } finally {
-      setSheetsSyncing(null);
-    }
-  };
-
-  const handleSyncPaymentsToSheets = async () => {
-    setSheetsSyncing('payments');
-    setSheetsError(null);
-    setCreatedSpreadsheetUrl(null);
-    try {
-      const token = await authorizeGoogleSheets();
-
-      const headers = [
-        'Client Name', 
-        'Client Email', 
-        'Receipt Key', 
-        'Package Title/Plan', 
-        'Duration Type', 
-        'Amount Paid/Due (₹)', 
-        'Start Date', 
-        'Due Date', 
-        'Payment Status'
-      ];
-
-      const rows = paymentRecords.map((r: any) => {
-        const cl = clients.find((c: any) => c.id === r.clientId);
-        return [
-          cl?.name || cl?.clientDetails?.fullName || 'N/A',
-          cl?.email || cl?.clientDetails?.email || 'N/A',
-          r.id || 'N/A',
-          r.package || 'N/A',
-          r.packageType || 'N/A',
-          parseFloat(r.amount) || 0,
-          r.startDate ? new Date(r.startDate).toLocaleDateString() : 'N/A',
-          r.dueDate ? new Date(r.dueDate).toLocaleDateString() : 'N/A',
-          r.status ? r.status.toUpperCase() : 'PENDING'
-        ];
-      });
-      const values = [headers, ...rows];
-
-      let spreadsheetId = '';
-      let spreadsheetUrl = '';
-      const tabName = paymentsTabInput.trim() || 'Payments';
-
-      if (paymentsSheetChoice === 'existing' && paymentsSpreadsheetInput.trim()) {
-        spreadsheetId = extractSpreadsheetId(paymentsSpreadsheetInput);
-        spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
-      } else {
-        const result = await createGoogleSpreadsheet(
-          'Speed Fit Payments Ledger',
-          [tabName],
-          token
-        );
-        spreadsheetId = result.spreadsheetId;
-        spreadsheetUrl = result.spreadsheetUrl;
-
-        setPaymentsSpreadsheetInput(spreadsheetId);
-        if (userData?.uid) {
-          await firebaseService.updateUser(userData.uid, {
-            paymentsSpreadsheetId: spreadsheetId,
-            paymentsSheetChoice: 'existing',
-            paymentsTabInput: tabName
-          }).catch(console.error);
-        }
-      }
-
-      await updateSheetValues(spreadsheetId, `${tabName}!A1`, values, token);
-      setCreatedSpreadsheetUrl(spreadsheetUrl);
-    } catch (err: any) {
-      console.error(err);
-      setSheetsError(err.message || 'Authorization or Sheets update failed.');
-    } finally {
-      setSheetsSyncing(null);
-    }
-  };
-
-  // Gmail trainer helpers
+  // Gmail trainer states
+  const [gmailSyncing, setGmailSyncing] = useState<boolean>(false);
+  const [gmailError, setGmailError] = useState<string | null>(null);
+  const [gmailSuccess, setGmailSuccess] = useState<string | null>(null);
+  const [gmailAuthorized, setGmailAuthorized] = useState<boolean>(false);
+  const [trainerTargetEmail, setTrainerTargetEmail] = useState<string>('');
+  const [trainerEmailSubject, setTrainerEmailSubject] = useState<string>('Speed Fit Custom Workout Alert');
+  const [trainerEmailBody, setTrainerEmailBody] = useState<string>('Dear Athlete,\n\nI have successfully loaded a new custom progressive overload profile in your checking panel.\n\nPlease follow layout guidelines carefully.\n\nBest,\nCoach');
   const handleTrainerGmailAuth = async () => {
     try {
       setGmailError(null);
@@ -1093,7 +770,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
     setGmailSuccess(null);
     try {
       const emailHtml = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #1e1e24; background-color: #0d0d0f; color: #f1f5f9; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #1e1e24; background-color: #0d0d0f; color: #1E1E24; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
           <!-- Header Banner -->
           <div style="background-color: #141417; padding: 25px 20px; border-bottom: 2px solid #e60000; text-align: center;">
             <p style="color: #e60000; font-family: monospace; font-size: 11px; margin: 0; font-weight: bold; letter-spacing: 2px; text-transform: uppercase;">Coach Direct Portal Notification</p>
@@ -1127,75 +804,15 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
     setGmailSuccess(null);
   };
 
-  // Google Drive trainer helpers
-  const handleTrainerDriveAuth = async () => {
-    try {
-      setDriveError(null);
-      await authorizeDrive();
-      setDriveAuthorized(true);
-      await handleTrainerFetchDriveFiles();
-    } catch (err: any) {
-      console.error(err);
-      setDriveError(err.message || 'Google Drive trainer authorization failed.');
-    }
-  };
-
-  const handleTrainerFetchDriveFiles = async () => {
-    setDriveSyncing(true);
-    setDriveError(null);
-    try {
-      const files = await listDriveFiles(driveQuery);
-      setDriveFiles(files);
-    } catch (err: any) {
-      console.error(err);
-      setDriveError('Failed to sync Drive records: ' + (err.message || err));
-    } finally {
-      setDriveSyncing(false);
-    }
-  };
-
-  const handleTrainerDriveUpload = async () => {
-    if (!trainerDriveFileName.trim() || !trainerDriveContent.trim()) {
-      setDriveError('Please specify both non-empty file name and program outline content.');
-      return;
-    }
-    setDriveSyncing(true);
-    setDriveError(null);
-    setDriveSuccess(null);
-    try {
-      const file = await uploadTextToDrive(trainerDriveFileName.trim(), trainerDriveContent, 'text/plain');
-      setDriveSuccess(`Performance map/outline "${file.name}" uploaded successfully! File ID: ${file.id}`);
-      await handleTrainerFetchDriveFiles();
-    } catch (err: any) {
-      console.error(err);
-      setDriveError('Drive upload failed: ' + (err.message || err));
-    } finally {
-      setDriveSyncing(false);
-    }
-  };
-
-  const handleTrainerDriveLogout = () => {
-    clearDriveAuthorization();
-    setDriveAuthorized(false);
-    setDriveFiles([]);
-    setDriveSuccess(null);
-  };
-
   useEffect(() => {
     setGmailAuthorized(isGmailAuthorized());
-    
-    const isDrAuth = isDriveAuthorized();
-    setDriveAuthorized(isDrAuth);
-    if (isDrAuth) {
-      handleTrainerFetchDriveFiles();
-    }
   }, []);
 
 
   if (loading) {
     return (
       <AppLayout>
-        <div className="absolute inset-0 flex items-center justify-center bg-[#111111]">
+        <div className="absolute inset-0 flex items-center justify-center bg-[#121214]">
           <div className="flex flex-col items-center space-y-4">
             <div className="w-10 h-10 border-4 border-[#E10600] border-t-transparent rounded-full animate-spin"></div>
             <p className="font-mono text-[10px] uppercase tracking-widest text-[#B2B2B2] font-bold">Initializing Premium Console...</p>
@@ -1207,7 +824,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
   return (
     <AppLayout>
-      <div className="space-y-8 pb-10 trainer-dark-theme bg-[#111111] text-white">
+      <div className="space-y-8 pb-10 trainer-dark-theme bg-[#121214] text-white">
         
         {/* HEADER SECTION */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#2A2A2A] pb-5">
@@ -1219,9 +836,28 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           <h1 className="text-3xl font-display font-bold italic uppercase tracking-tight text-white">
             Speed Fit <span className="text-brand-red">Dashboard</span>
           </h1>
-          <p className="text-xs font-mono text-neutral-400 uppercase tracking-widest mt-1">
+          <p className="text-xs font-mono text-[#A1A1AA] uppercase tracking-widest mt-1">
             Welcome, {userData?.name || 'Chief Coach'}. Controlling {clients.length} premium transformation profiles.
           </p>
+          {userData?.uid && (
+            <div className="flex items-center space-x-2 mt-2.5">
+              <span className="text-[11px] font-mono text-neutral-300 bg-neutral-900 border border-neutral-800 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="text-brand-red font-bold">Trainer ID:</span> 
+                <code className="text-white font-mono select-all font-semibold">{userData.uid}</code>
+              </span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(userData.uid);
+                  alert(`Trainer ID copied to clipboard: ${userData.uid}`);
+                }}
+                className="text-[10px] font-mono text-white bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                title="Copy Trainer ID"
+              >
+                <Copy className="w-3 h-3 text-brand-red" /> Copy ID
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex items-center space-x-3.5">
           <button 
@@ -1234,7 +870,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             )}
           </button>
           <div className="bg-neutral-900 border border-neutral-800 px-4 py-2.5 rounded-xl text-right min-w-[120px]">
-            <p className="text-[8px] font-mono text-neutral-400 font-bold uppercase tracking-widest">SYSTEM CLOCK</p>
+            <p className="text-[8px] font-mono text-[#A1A1AA] font-bold uppercase tracking-widest">SYSTEM CLOCK</p>
             <p className="text-sm font-semibold text-white font-mono">
               {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
             </p>
@@ -1276,8 +912,8 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
             {/* Attendance checklist card */}
-            <div className="lg:col-span-2 bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm space-y-6">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div className="lg:col-span-2 bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6">
+              <div className="flex justify-between items-center border-b border-[#262630] pb-3">
                 <div>
                   <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">DAILY CHECK-IN LOGS</h3>
                   <p className="text-xs text-[#64748B] font-mono">Roll-call checklist for high physical accountability.</p>
@@ -1296,7 +932,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     const recordObj = attendanceRecords.find(a => a.clientId === client.id && a.date === todayStr);
 
                     return (
-                      <div key={client.id} className="p-3.5 border border-[#E2E8F0] rounded-xl flex items-center justify-between bg-[#F8FAFC]">
+                      <div key={client.id} className="p-3.5 border border-[#262630] rounded-xl flex items-center justify-between bg-[#0D0D0F]">
                         <div>
                           <p className="text-xs font-bold text-[#0F172A] uppercase">{client.name}</p>
                           <p className="text-[9px] font-mono text-[#64748B] mt-0.5">{client.email}</p>
@@ -1333,8 +969,8 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             </div>
 
             {/* Client Flow & Monthly Attendance Chart */}
-            <div className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-3">
+            <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#262630] pb-3">
                 <div>
                   <h3 className="text-sm font-bold text-[#0F172A] font-mono uppercase tracking-wider">
                     {chartType === 'clientFlow' ? 'Client Flow' : 'Monthly Attendance'}
@@ -1343,13 +979,13 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     {chartType === 'clientFlow' ? 'Active recruitment curve' : 'Monthly registration status'}
                   </p>
                 </div>
-                <div className="flex items-center bg-[#F1F5F9] p-0.5 rounded-lg shrink-0">
+                <div className="flex items-center bg-[#1E1E24] p-0.5 rounded-lg shrink-0">
                   <button
                     onClick={() => setChartType('clientFlow')}
                     className={`px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider font-bold rounded-md transition-all cursor-pointer ${
                       chartType === 'clientFlow'
-                        ? 'bg-white text-brand-red shadow-sm'
-                        : 'text-slate-500 hover:text-slate-800'
+                        ? 'bg-[#141417] text-brand-red shadow-sm'
+                        : 'text-[#A1A1AA] hover:text-white'
                     }`}
                   >
                     Flow
@@ -1358,8 +994,8 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     onClick={() => setChartType('attendance')}
                     className={`px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider font-bold rounded-md transition-all cursor-pointer ${
                       chartType === 'attendance'
-                        ? 'bg-white text-brand-red shadow-sm'
-                        : 'text-slate-500 hover:text-slate-800'
+                        ? 'bg-[#141417] text-brand-red shadow-sm'
+                        : 'text-[#A1A1AA] hover:text-white'
                     }`}
                   >
                     Attendance
@@ -1373,26 +1009,26 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     <AreaChart data={monthlyData.clientFlow}>
                       <defs>
                         <linearGradient id="colorClients" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2}/>
-                          <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                          <stop offset="5%" stopColor="#E60000" stopOpacity={0.2}/>
+                          <stop offset="95%" stopColor="#E60000" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1E1E24" />
                       <XAxis dataKey="Month" stroke="#94A3B8" fontSize={9} className="font-mono" />
                       <YAxis stroke="#94A3B8" fontSize={9} className="font-mono" />
-                      <Tooltip wrapperClassName="font-mono rounded-xl text-black bg-white" />
-                      <Area type="monotone" dataKey="Active Recruits" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#colorClients)" />
+                      <Tooltip wrapperClassName="font-mono rounded-xl text-black bg-[#141417]" />
+                      <Area type="monotone" dataKey="Active Recruits" stroke="#E60000" strokeWidth={2} fillOpacity={1} fill="url(#colorClients)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={monthlyData.attendanceTrend}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1E1E24" />
                       <XAxis dataKey="Month" stroke="#94A3B8" fontSize={9} className="font-mono" />
                       <YAxis stroke="#94A3B8" fontSize={9} className="font-mono" />
-                      <Tooltip wrapperClassName="font-mono rounded-xl text-black bg-white" />
+                      <Tooltip wrapperClassName="font-mono rounded-xl text-black bg-[#141417]" />
                       <Bar dataKey="Present" fill="#10B981" radius={[3, 3, 0, 0]} name="Present" />
-                      <Bar dataKey="Missed" fill="#EF4444" radius={[3, 3, 0, 0]} name="Missed" />
+                      <Bar dataKey="Missed" fill="#E60000" radius={[3, 3, 0, 0]} name="Missed" />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -1406,7 +1042,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
       {/* 2. CLIENTS TAB */}
       {currentTab === 'clients' && (
         <div className="space-y-6">
-          <div className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm space-y-4">
+          <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3.5 top-3 w-4 h-4 text-[#64748B]" />
@@ -1415,13 +1051,13 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   placeholder="Query recruits by name or assigned email address..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs font-mono outline-none focus:border-brand-red/50"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#262630] text-xs font-mono outline-none focus:border-brand-red/50"
                 />
               </div>
               <div className="flex space-x-2">
                 <button 
                   onClick={() => setShowInactives(!showInactives)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-xs font-mono font-bold uppercase rounded-xl transition-all"
+                  className="px-4 py-2 bg-[#1E1E24] hover:bg-slate-200 text-xs font-mono font-bold uppercase rounded-xl transition-all"
                 >
                   {showInactives ? 'Hide de-activated' : 'Show de-activated'}
                 </button>
@@ -1435,127 +1071,19 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               </div>
             </div>
 
-            {/* OFFLINE CLIENT MANAGEMENT & GOOGLE SHEETS TRANSFERS */}
-            <div className="p-5 border border-slate-200 bg-slate-50/70 rounded-2xl space-y-4">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div>
-                  <h4 className="text-xs font-black text-neutral-900 font-mono tracking-wider uppercase flex items-center gap-2">
-                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                    Offline Client Management Engine (Google Sheets Sync Portal)
-                  </h4>
-                  <p className="text-[10px] text-[#64748B] font-mono mt-1 font-bold">
-                    Instantly package and transfer all athlete rosters, credentials, goals, active statuses, and registration timestamps into a secure, offline-manageable Google Sheets spreadsheet.
-                  </p>
-                </div>
-                <div className="shrink-0 flex flex-wrap gap-2">
-                  <button
-                    disabled={sheetsSyncing !== null}
-                    onClick={handleSyncAthletesToSheets}
-                    className="px-4 py-2.5 bg-neutral-950 hover:bg-neutral-850 text-white font-mono text-[10px] uppercase font-bold tracking-wider rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer border border-neutral-800"
-                  >
-                    <span>{sheetsSyncing === 'athletes' ? '🔄 EXPORTING...' : '📥 EXPORT TO SHEET'}</span>
-                  </button>
-                  <button
-                    disabled={sheetsSyncing !== null}
-                    onClick={handlePullAthletesFromSheets}
-                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[10px] uppercase font-bold tracking-wider rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer border border-emerald-500"
-                  >
-                    <span>{sheetsSyncing === 'athletes-pull' ? '🔄 PULLING...' : '📤 PULL FROM SHEET'}</span>
-                  </button>
-                </div>
-              </div>
 
-              {/* Destination settings panel */}
-              <div className="p-4 bg-white border border-slate-200/80 rounded-xl space-y-3">
-                <p className="text-[10px] font-bold text-neutral-800 uppercase font-mono tracking-wider">Sync Destination Settings:</p>
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                  <div className="md:col-span-4 flex rounded-lg border border-slate-200 p-1 bg-slate-100">
-                    <button
-                      type="button"
-                      onClick={() => setAthletesSheetChoice('new')}
-                      className={`flex-1 py-1 text-center font-mono text-[9px] uppercase font-bold rounded transition-all ${athletesSheetChoice === 'new' ? 'bg-neutral-900 text-white shadow-sm' : 'text-[#64748B] hover:text-neutral-900'}`}
-                    >
-                      Create Brand New
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAthletesSheetChoice('existing')}
-                      className={`flex-1 py-1 text-center font-mono text-[9px] uppercase font-bold rounded transition-all ${athletesSheetChoice === 'existing' ? 'bg-neutral-900 text-white shadow-sm' : 'text-[#64748B] hover:text-neutral-900'}`}
-                    >
-                      Update Existing
-                    </button>
-                  </div>
-                  
-                  {athletesSheetChoice === 'existing' ? (
-                    <>
-                      <div className="md:col-span-5">
-                        <input
-                          type="text"
-                          placeholder="Paste Google Sheet URL or spreadsheet ID..."
-                          value={athletesSpreadsheetInput}
-                          onChange={(e) => setAthletesSpreadsheetInput(e.target.value)}
-                          className="w-full px-3 py-1.5 text-[10px] font-mono border border-slate-200 rounded-lg outline-none focus:border-brand-red/60"
-                        />
-                      </div>
-                      <div className="md:col-span-3">
-                        <input
-                          type="text"
-                          placeholder="Tab Name (e.g. Athletes)"
-                          value={athletesTabInput}
-                          onChange={(e) => setAthletesTabInput(e.target.value)}
-                          className="w-full px-3 py-1.5 text-[10px] font-mono border border-slate-200 rounded-lg outline-none focus:border-brand-red/60"
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <div className="md:col-span-8">
-                      <p className="text-[9px] text-[#64748B] font-mono italic">
-                        Will generate a new spreadsheet "Speed Fit Athletes Ledger". Once generated, the target configuration will automatically lock to it for future incremental updates!
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {sheetsError && (
-                <div className="p-3 bg-rose-50 border border-rose-250 rounded-xl">
-                  <p className="text-[10px] font-mono text-rose-600 font-bold uppercase tracking-wider">
-                    ⚠️ Sheet Export Error: {sheetsError}
-                  </p>
-                </div>
-              )}
-
-              {createdSpreadsheetUrl && (
-                <div className="p-4 bg-emerald-50 border border-emerald-250 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
-                  <div>
-                    <h5 className="text-[11px] font-bold text-emerald-800 uppercase font-mono">✓ Spreadsheet Synced Successfully!</h5>
-                    <p className="text-[9px] font-mono text-emerald-600 mt-1 font-bold">
-                      Your customer records have been written directly to the target configuration tab.
-                    </p>
-                  </div>
-                  <a
-                    href={createdSpreadsheetUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    referrerPolicy="no-referrer"
-                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-mono font-bold text-[10px] uppercase rounded-xl transition-all shadow-md shrink-0 inline-block text-center"
-                  >
-                    Open Sheet Link ↗
-                  </a>
-                </div>
-              )}
-            </div>
 
             {/* Client Lists Board */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {activeClients.map((client) => {
-                const clientPass = client.password || client.assignedPassword || 'speedfit123';
+                const isSecure = !client.password && !client.assignedPassword && client.passwordHash;
+                const clientPass = isSecure ? '[Secured for Privacy]' : (client.password || client.assignedPassword || 'speedfit123');
                 return (
-                  <div key={client.id} className="bg-[#F8FAFC] border border-[#E2E8F0] p-5 rounded-[20px] transition-all hover:bg-white hover:border-brand-red/40 flex flex-col justify-between space-y-4 shadow-sm group">
+                  <div key={client.id} className="bg-[#0D0D0F] border border-[#262630] p-5 rounded-[20px] transition-all hover:bg-[#141417] hover:border-brand-red/40 flex flex-col justify-between space-y-4 shadow-sm group">
                     <div className="space-y-3">
                       <div className="space-y-1.55">
                         <div className="flex justify-between items-start">
-                          <div className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center font-display italic font-bold text-base text-brand-red">
+                          <div className="w-10 h-10 bg-[#141417] border border-[#262630] rounded-xl flex items-center justify-center font-display italic font-bold text-base text-brand-red">
                             {client.name?.[0]?.toUpperCase() || 'R'}
                           </div>
                           <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-600 font-bold px-2 py-0.5 rounded">ACTIVE</span>
@@ -1567,7 +1095,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       {/* LOGIN CREDENTIAL DISPLAY COUPLER */}
                       <div className="bg-[#0e0e11] text-white p-3.5 rounded-xl border border-neutral-800 space-y-2 font-mono text-[10px]">
                         <div className="flex items-center justify-between border-b border-neutral-800 pb-1.5">
-                          <span className="text-[8px] text-neutral-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                          <span className="text-[8px] text-[#A1A1AA] font-bold uppercase tracking-wider flex items-center gap-1">
                             <span className="w-1.5 h-1.5 bg-brand-red rounded-full animate-ping"></span>
                             🔑 Access Credentials
                           </span>
@@ -1575,7 +1103,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              navigator.clipboard.writeText(`Email: ${client.email}\nPassword: ${clientPass}`);
+                              navigator.clipboard.writeText(`Email: ${client.email}\nPassword: ${isSecure ? '(Please use the secure password set during invitation)' : clientPass}`);
                               alert('Onboarding credentials copied to clipboard!');
                             }}
                             className="text-[8px] bg-white/10 hover:bg-brand-red hover:text-white text-neutral-300 font-bold uppercase px-1.5 py-0.5 rounded transition-all active:scale-95 cursor-pointer"
@@ -1584,28 +1112,28 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           </button>
                         </div>
                         <div className="space-y-1 text-[9px]">
-                          <div className="flex items-center justify-between text-neutral-400">
+                          <div className="flex items-center justify-between text-[#A1A1AA]">
                             <span>EMAIL:</span>
                             <span className="text-white font-bold tracking-tight select-all truncate max-w-[130px]">{client.email}</span>
                           </div>
-                          <div className="flex items-center justify-between text-neutral-400">
+                          <div className="flex items-center justify-between text-[#A1A1AA]">
                             <span>SECRET:</span>
-                            <span className="text-emerald-400 font-extrabold select-all tracking-wider">{clientPass}</span>
+                            <span className={`${isSecure ? 'text-amber-400 font-medium' : 'text-emerald-400 font-extrabold'} select-all tracking-wider`}>{clientPass}</span>
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="border-t border-slate-200 pt-3 flex items-center justify-between gap-1.5">
+                    <div className="border-t border-[#262630] pt-3 flex items-center justify-between gap-1.5">
                       <Link 
                         to={`/client/${client.id}`}
-                        className="px-3 py-2 bg-white hover:bg-slate-100 text-xs border border-slate-200 text-[#0f172a] font-mono font-bold uppercase tracking-wider rounded-xl transition-all w-full text-center"
+                        className="px-3 py-2 bg-[#141417] hover:bg-[#1E1E24] text-xs border border-[#262630] text-[#0f172a] font-mono font-bold uppercase tracking-wider rounded-xl transition-all w-full text-center"
                       >
                         Control Profile
                       </Link>
                       <button 
                         onClick={() => handleToggleActive(client.id, client.isActive)}
-                        className="p-2 border border-slate-200 rounded-xl hover:bg-rose-50 text-rose-500 transition-colors"
+                        className="p-2 border border-[#262630] rounded-xl hover:bg-rose-50 text-rose-500 transition-colors"
                       >
                         <Trash2 className="w-4 h-4 shrink-0" />
                       </button>
@@ -1615,9 +1143,10 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               })}
 
               {showInactives && inactiveClients.map((client) => {
-                const clientPass = client.password || client.assignedPassword || 'speedfit123';
+                const isSecure = !client.password && !client.assignedPassword && client.passwordHash;
+                const clientPass = isSecure ? '[Secured for Privacy]' : (client.password || client.assignedPassword || 'speedfit123');
                 return (
-                  <div key={client.id} className="bg-[#F8FAFC]/50 border border-dashed border-slate-300 p-5 rounded-[20px] opacity-60 flex flex-col justify-between space-y-4">
+                  <div key={client.id} className="bg-[#0D0D0F]/50 border border-dashed border-[#262630] p-5 rounded-[20px] opacity-60 flex flex-col justify-between space-y-4">
                     <div className="space-y-3">
                       <div>
                         <h4 className="text-sm font-bold text-[#64748B] uppercase">{client.name}</h4>
@@ -1626,13 +1155,13 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
                       {/* INACTIVE LOGIN CREDENTIAL BADGE */}
                       <div className="bg-[#0e0e11]/80 text-white p-3 rounded-lg border border-neutral-800 space-y-1.5 font-mono text-[9px]">
-                        <div className="flex justify-between text-neutral-400">
+                        <div className="flex justify-between text-[#A1A1AA]">
                           <span>EMAIL:</span>
                           <span className="text-white select-all font-bold truncate max-w-[100px]">{client.email}</span>
                         </div>
-                        <div className="flex justify-between text-neutral-400">
+                        <div className="flex justify-between text-[#A1A1AA]">
                           <span>SECRET:</span>
-                          <span className="text-neutral-300 font-semibold select-all">{clientPass}</span>
+                          <span className={`${isSecure ? 'text-amber-400 font-medium' : 'text-neutral-300 font-semibold'} select-all`}>{clientPass}</span>
                         </div>
                       </div>
                     </div>
@@ -1655,7 +1184,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
         <div className="space-y-6">
           {/* Quick Analytics Strip */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white border border-[#E2E8F0] p-5 rounded-[20px] shadow-sm flex items-center space-x-4">
+            <div className="bg-[#141417] border border-[#262630] p-5 rounded-[20px] shadow-sm flex items-center space-x-4">
               <div className="p-3 bg-brand-red/10 text-brand-red rounded-xl shrink-0">
                 <TrendingUp className="w-5 h-5" />
               </div>
@@ -1666,7 +1195,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               </div>
             </div>
 
-            <div className="bg-white border border-[#E2E8F0] p-5 rounded-[20px] shadow-sm flex items-center space-x-4">
+            <div className="bg-[#141417] border border-[#262630] p-5 rounded-[20px] shadow-sm flex items-center space-x-4">
               <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-xl shrink-0">
                 <CheckCircle className="w-5 h-5" />
               </div>
@@ -1677,7 +1206,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               </div>
             </div>
 
-            <div className="bg-white border border-[#E2E8F0] p-5 rounded-[20px] shadow-sm flex items-center space-x-4">
+            <div className="bg-[#141417] border border-[#262630] p-5 rounded-[20px] shadow-sm flex items-center space-x-4">
               <div className="p-3 bg-amber-500/10 text-amber-600 rounded-xl shrink-0">
                 <Calendar className="w-5 h-5" />
               </div>
@@ -1688,7 +1217,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               </div>
             </div>
 
-            <div className="bg-white border border-[#E2E8F0] p-5 rounded-[20px] shadow-sm flex items-center space-x-4 flex-1">
+            <div className="bg-[#141417] border border-[#262630] p-5 rounded-[20px] shadow-sm flex items-center space-x-4 flex-1">
               <div className="p-3 bg-brand-red/10 text-brand-red rounded-xl shrink-0">
                 <Star className="w-5 h-5" />
               </div>
@@ -1702,8 +1231,8 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Interactive Monthly Calendar Planner card (Column width: 7) */}
-            <div className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm lg:col-span-7 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 pb-2 border-b border-slate-100">
+            <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm lg:col-span-7 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 pb-2 border-b border-[#262630]">
                 <div>
                   <h3 className="text-xs font-bold text-[#0F172A] font-mono uppercase tracking-wider">Attendance Calendar</h3>
                   <p className="text-[10px] text-[#64748B] font-mono">Select a grid segment to display log entries.</p>
@@ -1711,7 +1240,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                 <div className="flex items-center space-x-1">
                   <button 
                     onClick={() => setSelectedCalendarDate(new Date(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth() - 1, 1))}
-                    className="p-1.5 border border-[#E2E8F0] hover:bg-slate-50 rounded-lg text-[#0F172A] cursor-pointer"
+                    className="p-1.5 border border-[#262630] hover:bg-[#0D0D0F] rounded-lg text-[#0F172A] cursor-pointer"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
@@ -1720,7 +1249,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   </span>
                   <button 
                     onClick={() => setSelectedCalendarDate(new Date(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth() + 1, 1))}
-                    className="p-1.5 border border-[#E2E8F0] hover:bg-slate-50 rounded-lg text-[#0F172A] cursor-pointer"
+                    className="p-1.5 border border-[#262630] hover:bg-[#0D0D0F] rounded-lg text-[#0F172A] cursor-pointer"
                   >
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
@@ -1729,7 +1258,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       setSelectedCalendarDate(new Date());
                       setFocusedDate(format(new Date(), 'yyyy-MM-dd'));
                     }}
-                    className="ml-2 px-2.5 py-1.5 border border-[#E2E8F0] hover:bg-slate-50 rounded-lg text-[9px] font-mono font-bold uppercase text-[#0F172A] cursor-pointer"
+                    className="ml-2 px-2.5 py-1.5 border border-[#262630] hover:bg-[#0D0D0F] rounded-lg text-[9px] font-mono font-bold uppercase text-[#0F172A] cursor-pointer"
                   >
                     Today
                   </button>
@@ -1737,7 +1266,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               </div>
 
               {/* Grid Header Days */}
-              <div className="grid grid-cols-7 gap-1 text-center font-mono text-[9px] uppercase font-bold tracking-wider text-[#64748B] border-b border-[#F1F5F9] pb-2">
+              <div className="grid grid-cols-7 gap-1 text-center font-mono text-[9px] uppercase font-bold tracking-wider text-[#64748B] border-b border-[#1E1E24] pb-2">
                 <div>Sun</div>
                 <div>Mon</div>
                 <div>Tue</div>
@@ -1767,8 +1296,8 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       onClick={() => setFocusedDate(dateStr)}
                       className={`min-h-[58px] p-2 border text-left rounded-xl transition-all flex flex-col justify-between relative group cursor-pointer ${
                         isCurrentMonth 
-                          ? 'bg-[#F8FAFC]/50 border-[#E2E8F0] hover:border-brand-red/40 hover:bg-brand-red/5' 
-                          : 'bg-[#F1F5F9]/20 text-slate-300 border-dashed border-slate-250 opacity-50'
+                          ? 'bg-[#0D0D0F]/50 border-[#262630] hover:border-brand-red/40 hover:bg-brand-red/5' 
+                          : 'bg-[#1E1E24]/20 text-slate-300 border-dashed border-slate-250 opacity-50'
                       } ${isFocused ? 'ring-2 ring-brand-red border-brand-red bg-red-50/10' : ''}`}
                     >
                       <div className="flex justify-between items-center w-full">
@@ -1779,7 +1308,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                         </span>
                         
                         {totalCount > 0 && (
-                          <span className="text-[8px] font-mono font-bold bg-[#E2E8F0] text-[#0f172a] px-1 rounded-sm">
+                          <span className="text-[8px] font-mono font-bold bg-[#262630] text-[#0f172a] px-1 rounded-sm">
                             {totalCount}
                           </span>
                         )}
@@ -1808,9 +1337,9 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             </div>
 
             {/* Daily Log Check-in Controller Column (Column width: 5) */}
-            <div className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm lg:col-span-5 flex flex-col justify-between space-y-6">
+            <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm lg:col-span-5 flex flex-col justify-between space-y-6">
               <div className="space-y-4">
-                <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+                <div className="flex justify-between items-start border-b border-[#262630] pb-3">
                   <div>
                     <h3 className="text-sm font-bold text-[#0F172A] font-mono uppercase tracking-wider">
                       Roster Registry
@@ -1831,7 +1360,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           setSelectedCalendarDate(new Date(e.target.value));
                         }
                       }}
-                      className="border border-[#E2E8F0] text-[10px] font-mono font-bold uppercase rounded-lg px-2 py-1 text-[#0F172A] focus:outline-none focus:border-brand-red"
+                      className="border border-[#262630] text-[10px] font-mono font-bold uppercase rounded-lg px-2 py-1 text-[#0F172A] focus:outline-none focus:border-brand-red"
                     />
                   </div>
                 </div>
@@ -1844,7 +1373,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     placeholder="Search recruits..."
                     value={attendanceFilterQuery}
                     onChange={(e) => setAttendanceFilterQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-1.5 border border-[#E2E8F0] rounded-xl text-[10px] font-mono outline-none focus:border-brand-red/45 text-[#0F172A]"
+                    className="w-full pl-9 pr-3 py-1.5 border border-[#262630] rounded-xl text-[10px] font-mono outline-none focus:border-brand-red/45 text-[#0F172A]"
                   />
                 </div>
 
@@ -1859,7 +1388,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       const isMissed = dayRecord?.status === 'Missed';
 
                       return (
-                        <div key={client.id} className="p-3 border border-[#E2E8F0] bg-[#F8FAFC]/60 rounded-xl flex items-center justify-between group hover:bg-white transition-all">
+                        <div key={client.id} className="p-3 border border-[#262630] bg-[#0D0D0F]/60 rounded-xl flex items-center justify-between group hover:bg-[#141417] transition-all">
                           <div className="min-w-0 flex-1 mr-3">
                             <p className="text-[11px] font-bold text-[#0F172A] uppercase truncate">{client.name}</p>
                             <div className="text-[9px] font-mono text-[#64748B] truncate mt-0.5">
@@ -1868,7 +1397,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                                   ● {dayRecord.status.toUpperCase()}
                                 </span>
                               ) : (
-                                <span className="text-gray-400 font-bold">○ UNMARKED</span>
+                                <span className="text-[#A1A1AA] font-bold">○ UNMARKED</span>
                               )}
                             </div>
                             {isPresent && dayRecord && (
@@ -1880,7 +1409,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                                   placeholder="e.g. 09:00 AM" 
                                   value={dayRecord.timing || ''} 
                                   onChange={(e) => handleUpdateTiming(dayRecord.id, e.target.value)}
-                                  className="w-20 px-1 py-0.5 border border-slate-250 focus:border-brand-red rounded font-mono text-[9px] outline-none bg-white font-bold text-[#0F172A]"
+                                  className="w-20 px-1 py-0.5 border border-slate-250 focus:border-brand-red rounded font-mono text-[9px] outline-none bg-[#141417] font-bold text-[#0F172A]"
                                 />
                               </div>
                             )}
@@ -1892,7 +1421,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                               className={`px-2.5 py-1 rounded-lg text-[9px] font-mono uppercase tracking-wider font-bold transition-all border cursor-pointer ${
                                 isPresent 
                                   ? 'bg-[#EBFDF5] text-emerald-850 hover:bg-[#EBFDF5] border-emerald-300 font-black shadow-[0_1px_3px_rgba(16,185,129,0.1)]' 
-                                  : 'bg-white hover:bg-[#EBFDF5]/40 text-slate-500 border-slate-200'
+                                  : 'bg-[#141417] hover:bg-[#EBFDF5]/40 text-[#A1A1AA] border-[#262630]'
                               }`}
                             >
                               Present
@@ -1902,7 +1431,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                               className={`px-2.5 py-1 rounded-lg text-[9px] font-mono uppercase tracking-wider font-bold transition-all border cursor-pointer ${
                                 isMissed 
                                   ? 'bg-[#FEF2F2] text-rose-850 hover:bg-[#FEF2F2] border-rose-300 font-black shadow-[0_1px_3px_rgba(239,68,68,0.1)]' 
-                                  : 'bg-white hover:bg-[#FEF2F2]/40 text-slate-500 border-slate-200'
+                                  : 'bg-[#141417] hover:bg-[#FEF2F2]/40 text-[#A1A1AA] border-[#262630]'
                               }`}
                             >
                               Missed
@@ -1911,7 +1440,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                             {dayRecord && (
                               <button
                                 onClick={() => handleDeleteAttendanceRecord(dayRecord.id)}
-                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all border border-transparent cursor-pointer"
+                                className="p-1 text-[#A1A1AA] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all border border-transparent cursor-pointer"
                                 title="Delete attendance entry"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1923,13 +1452,13 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     })}
 
                   {clients.filter(c => c.isActive !== false).length === 0 && (
-                    <p className="text-xs text-center p-4 font-mono text-gray-500">No active clients onboarded on system.</p>
+                    <p className="text-xs text-center p-4 font-mono text-[#A1A1AA]">No active clients onboarded on system.</p>
                   )}
                 </div>
               </div>
 
               {/* Bulk operations panel */}
-              <div className="bg-[#F8FAFC] border border-[#E2E8F0] p-4 rounded-xl space-y-3">
+              <div className="bg-[#0D0D0F] border border-[#262630] p-4 rounded-xl space-y-3">
                 <p className="text-[10px] font-mono uppercase tracking-wider text-[#64748B] font-bold">Roster Bulk Operations</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -1950,7 +1479,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           </div>
 
           {/* Timeline Registry Flow of Last 10 records */}
-          <div className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm space-y-4">
+          <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
                 <h3 className="text-sm font-bold text-[#0F172A] font-mono uppercase tracking-wider">Live Check-in Ledger</h3>
@@ -1963,7 +1492,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   placeholder="Filter by athlete name..."
                   value={attendanceHistoryQuery}
                   onChange={(e) => setAttendanceHistoryQuery(e.target.value)}
-                  className="pl-9 pr-3 py-1.5 border border-[#E2E8F0] rounded-xl text-[10px] font-mono outline-none focus:border-brand-red/40 text-[#0F172A]"
+                  className="pl-9 pr-3 py-1.5 border border-[#262630] rounded-xl text-[10px] font-mono outline-none focus:border-brand-red/40 text-[#0F172A]"
                 />
               </div>
             </div>
@@ -1982,7 +1511,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   if (!athleteObj) return null;
 
                   return (
-                    <div key={record.id} className="p-3 border border-[#E2E8F0] rounded-xl flex items-center justify-between bg-slate-50 text-xs font-mono group hover:bg-white transition-all">
+                    <div key={record.id} className="p-3 border border-[#262630] rounded-xl flex items-center justify-between bg-[#0D0D0F] text-xs font-mono group hover:bg-[#141417] transition-all">
                       <div className="flex items-center space-x-3">
                         <div className="w-8 h-8 rounded-lg bg-brand-red/10 flex items-center justify-center text-brand-red font-bold font-display italic shrink-0">
                           {athleteObj.name?.[0]?.toUpperCase() || 'A'}
@@ -2000,7 +1529,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                         </span>
                         <button
                           onClick={() => handleDeleteAttendanceRecord(record.id)}
-                          className="text-slate-400 hover:text-rose-600 transition-colors p-1.5 opacity-0 group-hover:opacity-100 cursor-pointer"
+                          className="text-[#A1A1AA] hover:text-rose-600 transition-colors p-1.5 opacity-0 group-hover:opacity-100 cursor-pointer"
                           title="Purge Entry"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -2025,7 +1554,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             <div className="space-y-4">
               <button 
                 onClick={() => setReviewingDraft(null)}
-                className="px-4 py-2 border border-slate-200 hover:bg-slate-100 font-mono text-[10px] uppercase font-bold rounded-xl transition-all"
+                className="px-4 py-2 border border-[#262630] hover:bg-[#1E1E24] font-mono text-[10px] uppercase font-bold rounded-xl transition-all"
               >
                 ← Back to Draft Queue
               </button>
@@ -2033,7 +1562,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               {/* AI engine removed */}
             </div>
           ) : (
-            <div className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm space-y-6">
+            <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6">
               <div>
                 <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">PENDING REVIEW SYSTEM QUEUE</h3>
                 <p className="text-xs text-[#64748B] font-mono">Requires human certified coach validation before launching workout & nutrition plans.</p>
@@ -2041,7 +1570,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
               <div className="space-y-3">
                 {pendingReviews.length === 0 ? (
-                  <div className="text-center py-12 border border-dashed border-slate-300 rounded-2xl bg-slate-50">
+                  <div className="text-center py-12 border border-dashed border-[#262630] rounded-2xl bg-[#0D0D0F]">
                     <Zap className="w-8 h-8 text-slate-300 mx-auto animate-pulse mb-2.5" />
                     <p className="font-mono text-xs uppercase text-[#64748B]">Zero drafts awaiting human validation.</p>
                   </div>
@@ -2050,7 +1579,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     const recruitObj = clients.find(c => c.id === draft.clientId);
 
                     return (
-                      <div key={draft.id} className="p-4 border border-[#E2E8F0] rounded-xl flex items-center justify-between bg-slate-50 font-mono text-xs">
+                      <div key={draft.id} className="p-4 border border-[#262630] rounded-xl flex items-center justify-between bg-[#0D0D0F] font-mono text-xs">
                         <div>
                           <p className="font-bold text-[#0F172A] uppercase">{recruitObj?.name || 'Recruit Blueprint'}</p>
                           <p className="text-[10px] text-[#64748B] mt-0.5">Calories target: {draft.dietPlan?.calories} kcal / Protein: {draft.dietPlan?.protein}g</p>
@@ -2079,7 +1608,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: "easeOut" }}
-          className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm space-y-6"
+          className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6"
         >
           <div>
             <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">PRESET ACTIVE WORKOUT SCHEMES</h3>
@@ -2091,7 +1620,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3 }}
-              className="p-12 text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50"
+              className="p-12 text-center border border-dashed border-[#262630] rounded-2xl bg-[#0D0D0F]"
             >
               <ClipboardList className="w-8 h-8 text-slate-350 mx-auto animate-bounce mb-3" />
               <p className="font-mono text-xs text-[#64748B] uppercase">No workout plans recorded in database yet.</p>
@@ -2108,9 +1637,9 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     transition={{ duration: 0.2, delay: i * 0.05 }}
                     whileHover={{ y: -4, transition: { duration: 0.15 } }}
                     key={plan.id} 
-                    className="p-4 border border-[#E2E8F0] rounded-2xl bg-slate-50 space-y-3.5 transition-shadow hover:shadow-md"
+                    className="p-4 border border-[#262630] rounded-2xl bg-[#0D0D0F] space-y-3.5 transition-shadow hover:shadow-md"
                   >
-                    <div className="flex justify-between items-start border-b border-slate-200 pb-2">
+                    <div className="flex justify-between items-start border-b border-[#262630] pb-2">
                       <div>
                         <p className="text-xs font-bold text-[#0f172a] uppercase">{plan.title || "Prestige Plan"}</p>
                         <p className="text-[9px] font-mono text-[#64748B] mt-0.5">For recruit: {clientObj?.name || 'Assigned'}</p>
@@ -2138,7 +1667,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           disabled={plan.approved}
                           className={`flex-1 text-center py-1.5 font-mono text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all ${
                             plan.approved 
-                              ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200" 
+                              ? "bg-[#1E1E24] text-[#A1A1AA] cursor-not-allowed border border-[#262630]" 
                               : "bg-emerald-600 hover:bg-emerald-705 text-white shadow-sm"
                           }`}
                         >
@@ -2149,7 +1678,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           className={`flex-1 text-center py-1.5 font-mono text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all ${
                             plan.approvalStatus === 'revision'
                               ? "bg-rose-50 text-rose-500 border border-rose-200"
-                              : "bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300"
+                              : "bg-[#1E1E24] hover:bg-slate-200 text-white border border-[#262630]"
                           }`}
                         >
                           {plan.approvalStatus === 'revision' ? "Pending Revision" : "Mark Revision"}
@@ -2157,7 +1686,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       </div>
                       <Link
                         to={`/client/${plan.clientId}?tab=plans`}
-                        className="text-center py-1.5 bg-neutral-100 hover:bg-neutral-200 text-[#0F172A] border border-[#E2E8F0] font-mono text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all"
+                        className="text-center py-1.5 bg-[#1E1E24] hover:bg-neutral-200 text-[#0F172A] border border-[#262630] font-mono text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all"
                       >
                         Verify, Edit & Update
                       </Link>
@@ -2176,7 +1705,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: "easeOut" }}
-          className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm space-y-6"
+          className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6"
         >
           <div>
             <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">DIET PLANS CATALOGUE</h3>
@@ -2188,7 +1717,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3 }}
-              className="p-12 text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50"
+              className="p-12 text-center border border-dashed border-[#262630] rounded-2xl bg-[#0D0D0F]"
             >
               <ClipboardList className="w-8 h-8 text-slate-350 mx-auto animate-bounce mb-3" />
               <p className="font-mono text-xs text-[#64748B] uppercase">No diet plans recorded in database yet.</p>
@@ -2205,9 +1734,9 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     transition={{ duration: 0.2, delay: i * 0.05 }}
                     whileHover={{ y: -4, transition: { duration: 0.15 } }}
                     key={plan.id} 
-                    className="p-4 border border-[#E2E8F0] rounded-2xl bg-slate-50 space-y-3.5 transition-shadow hover:shadow-md"
+                    className="p-4 border border-[#262630] rounded-2xl bg-[#0D0D0F] space-y-3.5 transition-shadow hover:shadow-md"
                   >
-                    <div className="flex justify-between items-start border-b border-slate-200 pb-2">
+                    <div className="flex justify-between items-start border-b border-[#262630] pb-2">
                       <div>
                         <p className="text-xs font-bold text-[#0f172a] uppercase">{plan.title || "Prestige Diet Strategy"}</p>
                         <p className="text-[9px] font-mono text-[#64748B] mt-0.5">For recruit: {clientObj?.name || 'Assigned'}</p>
@@ -2227,7 +1756,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       )}
                     </div>
                     
-                    <div className="grid grid-cols-4 gap-2 text-center bg-white p-2 rounded-xl border border-slate-100">
+                    <div className="grid grid-cols-4 gap-2 text-center bg-[#141417] p-2 rounded-xl border border-[#262630]">
                       <div>
                         <p className="text-[8px] font-mono text-[#64748B] uppercase">Kcal</p>
                         <p className="text-xs font-extrabold text-[#0F172A] font-mono mt-0.5">{plan.calories || 2000}</p>
@@ -2255,7 +1784,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           disabled={plan.approved}
                           className={`flex-1 text-center py-1.5 font-mono text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all ${
                             plan.approved 
-                              ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200" 
+                              ? "bg-[#1E1E24] text-[#A1A1AA] cursor-not-allowed border border-[#262630]" 
                               : "bg-emerald-600 hover:bg-emerald-705 text-white shadow-sm"
                           }`}
                         >
@@ -2266,7 +1795,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           className={`flex-1 text-center py-1.5 font-mono text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all ${
                             plan.approvalStatus === 'revision'
                               ? "bg-rose-50 text-rose-500 border border-rose-200"
-                              : "bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300"
+                              : "bg-[#1E1E24] hover:bg-slate-200 text-white border border-[#262630]"
                           }`}
                         >
                           {plan.approvalStatus === 'revision' ? "Pending Revision" : "Mark Revision"}
@@ -2274,7 +1803,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       </div>
                       <Link
                         to={`/client/${plan.clientId}?tab=plans`}
-                        className="text-center py-1.5 bg-neutral-100 hover:bg-neutral-200 text-[#0F172A] border border-[#E2E8F0] font-mono text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all"
+                        className="text-center py-1.5 bg-[#1E1E24] hover:bg-neutral-200 text-[#0F172A] border border-[#262630] font-mono text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all"
                       >
                         Verify, Edit & Update
                       </Link>
@@ -2289,14 +1818,14 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
       {/* 7. REPORTS DOWNLOAD TAB */}
       {currentTab === 'reports' && (
-        <div className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm space-y-6">
+        <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6">
           <div>
             <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">COACHES REPORTING DESK</h3>
             <p className="text-xs text-[#64748B] font-mono">Download standard progress summaries, posture reviews, or payment metrics PDFs.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 border border-[#E2E8F0] bg-slate-50 rounded-2xl flex items-center justify-between">
+            <div className="p-4 border border-[#262630] bg-[#0D0D0F] rounded-2xl flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-[#0f172a] uppercase">Aggregate Payments Audit</p>
                 <p className="text-[9px] font-mono text-[#64748B] mt-0.5">Export PDF of overall collections list.</p>
@@ -2309,7 +1838,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               </button>
             </div>
 
-            <div className="p-4 border border-[#E2E8F0] bg-slate-50 rounded-2xl flex items-center justify-between">
+            <div className="p-4 border border-[#262630] bg-[#0D0D0F] rounded-2xl flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-[#0f172a] uppercase">Master Invoices Summary</p>
                 <p className="text-[9px] font-mono text-[#64748B] mt-0.5">Export PDF invoice detailing payment histories and outstanding dues of all clients.</p>
@@ -2322,7 +1851,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               </button>
             </div>
 
-            <div className="p-4 border border-[#E2E8F0] bg-slate-50 rounded-2xl flex items-center justify-between">
+            <div className="p-4 border border-[#262630] bg-[#0D0D0F] rounded-2xl flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-[#0f172a] uppercase">All Athletes Profiles Booklet</p>
                 <p className="text-[9px] font-mono text-[#64748B] mt-0.5">Compile detailed multi-page PDF workbook of all client dossiers.</p>
@@ -2335,7 +1864,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               </button>
             </div>
 
-            <div className="p-4 border border-[#E2E8F0] bg-slate-50 rounded-2xl flex items-center justify-between">
+            <div className="p-4 border border-[#262630] bg-[#0D0D0F] rounded-2xl flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-[#0f172a] uppercase">Attendance Registry Journal</p>
                 <p className="text-[9px] font-mono text-[#64748B] mt-0.5">Export PDF of overall arrival times, slots, and marked attendances.</p>
@@ -2348,7 +1877,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               </button>
             </div>
 
-            <div className="p-4 border border-[#E2E8F0] bg-slate-50 rounded-2xl flex items-center justify-between">
+            <div className="p-4 border border-[#262630] bg-[#0D0D0F] rounded-2xl flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-[#0f172a] uppercase">transformation testimonials</p>
                 <p className="text-[9px] font-mono text-[#64748B] mt-0.5">Edit and upload new success reviews.</p>
@@ -2371,183 +1900,12 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                 className="px-4 py-2 bg-brand-red hover:bg-red-700 text-white font-mono text-[9px] uppercase font-bold rounded-lg transition-all"
               >
                 Manage Testimonials
-              </button>
-            </div>
+            </button>
           </div>
-
-          <div className="mt-8 pt-6 border-t border-slate-200">
-            <h4 className="text-sm font-bold text-[#0F172A] font-mono uppercase tracking-widest text-brand-red mb-4 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-brand-red rounded-full"></span>
-              Google Sheets Synchronization Desk
-            </h4>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Sync Athletes */}
-              <div className="p-5 border border-[#E2E8F0] bg-slate-50 rounded-2xl flex flex-col justify-between space-y-4">
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-xs font-bold text-[#0f172a] uppercase flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                      Sync Athletes Matrix
-                    </p>
-                    <p className="text-[9px] font-mono text-[#64748B] mt-1">
-                      Generate and format a live Google Sheets spreadsheet with all active coached athlete demographics and statuses.
-                    </p>
-                  </div>
-                  
-                  {/* Settings embedded */}
-                  <div className="p-3 bg-white border border-slate-250 rounded-xl space-y-2">
-                    <div className="flex gap-1.5 bg-slate-100 p-0.5 rounded-md">
-                      <button
-                        type="button"
-                        onClick={() => setAthletesSheetChoice('new')}
-                        className={`flex-1 py-1 text-center font-mono text-[8px] uppercase font-bold rounded transition-all ${athletesSheetChoice === 'new' ? 'bg-neutral-900 text-white shadow-sm' : 'text-[#64748B] hover:text-neutral-900'}`}
-                      >
-                        New Sheet
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAthletesSheetChoice('existing')}
-                        className={`flex-1 py-1 text-center font-mono text-[8px] uppercase font-bold rounded transition-all ${athletesSheetChoice === 'existing' ? 'bg-neutral-900 text-white shadow-sm' : 'text-[#64748B] hover:text-neutral-900'}`}
-                      >
-                        Existing Sheet
-                      </button>
-                    </div>
-                    {athletesSheetChoice === 'existing' ? (
-                      <div className="space-y-1.5">
-                        <input
-                          type="text"
-                          placeholder="Spreadsheet Link / ID"
-                          value={athletesSpreadsheetInput}
-                          onChange={(e) => setAthletesSpreadsheetInput(e.target.value)}
-                          className="w-full px-2 py-1 text-[9px] font-mono border border-slate-200 rounded outline-none focus:border-brand-red/60"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Tab Name (Athletes)"
-                          value={athletesTabInput}
-                          onChange={(e) => setAthletesTabInput(e.target.value)}
-                          className="w-full px-2 py-1 text-[9px] font-mono border border-slate-200 rounded outline-none focus:border-brand-red/60"
-                        />
-                      </div>
-                    ) : (
-                      <p className="text-[8px] text-[#64748B] font-mono italic">
-                        Will generate brand-new, and then lock configurations permanently.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    disabled={sheetsSyncing !== null}
-                    onClick={handleSyncAthletesToSheets}
-                    className="w-full py-2 bg-neutral-900 hover:bg-neutral-800 text-white border border-neutral-700 font-mono text-[9px] uppercase font-bold rounded-lg transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    {sheetsSyncing === 'athletes' ? 'Exporting...' : 'Sync Athletes List'}
-                  </button>
-                  <button
-                    disabled={sheetsSyncing !== null}
-                    onClick={handlePullAthletesFromSheets}
-                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 font-mono text-[9px] uppercase font-bold rounded-lg transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    {sheetsSyncing === 'athletes-pull' ? 'Pulling...' : 'Pull Athletes'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Sync Financial */}
-              <div className="p-5 border border-[#E2E8F0] bg-slate-50 rounded-2xl flex flex-col justify-between space-y-4">
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-xs font-bold text-[#0f172a] uppercase flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                      Sync Financial Ledger
-                    </p>
-                    <p className="text-[9px] font-mono text-[#64748B] mt-1">
-                      Export payment history, audit tags, and record IDs directly into a structured and shareable Google Sheet workbook.
-                    </p>
-                  </div>
-
-                  {/* Settings embedded */}
-                  <div className="p-3 bg-white border border-slate-250 rounded-xl space-y-2">
-                    <div className="flex gap-1.5 bg-slate-100 p-0.5 rounded-md">
-                      <button
-                        type="button"
-                        onClick={() => setPaymentsSheetChoice('new')}
-                        className={`flex-1 py-1 text-center font-mono text-[8px] uppercase font-bold rounded transition-all ${paymentsSheetChoice === 'new' ? 'bg-neutral-900 text-white shadow-sm' : 'text-[#64748B] hover:text-neutral-900'}`}
-                      >
-                        New Sheet
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPaymentsSheetChoice('existing')}
-                        className={`flex-1 py-1 text-center font-mono text-[8px] uppercase font-bold rounded transition-all ${paymentsSheetChoice === 'existing' ? 'bg-neutral-900 text-white shadow-sm' : 'text-[#64748B] hover:text-neutral-900'}`}
-                      >
-                        Existing Sheet
-                      </button>
-                    </div>
-                    {paymentsSheetChoice === 'existing' ? (
-                      <div className="space-y-1.5">
-                        <input
-                          type="text"
-                          placeholder="Spreadsheet Link / ID"
-                          value={paymentsSpreadsheetInput}
-                          onChange={(e) => setPaymentsSpreadsheetInput(e.target.value)}
-                          className="w-full px-2 py-1 text-[9px] font-mono border border-slate-200 rounded outline-none focus:border-brand-red/60"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Tab Name (Payments)"
-                          value={paymentsTabInput}
-                          onChange={(e) => setPaymentsTabInput(e.target.value)}
-                          className="w-full px-2 py-1 text-[9px] font-mono border border-slate-200 rounded outline-none focus:border-brand-red/60"
-                        />
-                      </div>
-                    ) : (
-                      <p className="text-[8px] text-[#64748B] font-mono italic">
-                        Will generate brand-new, and then lock configurations permanently.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  disabled={sheetsSyncing !== null}
-                  onClick={handleSyncPaymentsToSheets}
-                  className="w-full py-2 bg-neutral-900 hover:bg-neutral-800 text-white border border-neutral-700 font-mono text-[9px] uppercase font-bold rounded-lg transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {sheetsSyncing === 'payments' ? 'Authorizing & Exporting...' : 'Sync Financial Ledger'}
-                </button>
-              </div>
-            </div>
-
-            {sheetsError && (
-              <p className="mt-4 text-[10px] font-mono text-rose-500 font-bold uppercase tracking-wider bg-rose-500/10 p-3 rounded-lg border border-rose-500/20">
-                ⚠️ Sync Error: {sheetsError}
-              </p>
-            )}
-
-            {createdSpreadsheetUrl && (
-              <div className="mt-4 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-pulse">
-                <div className="text-left">
-                  <p className="text-xs font-bold text-emerald-400 uppercase">✓ Spreadsheet Successfully Generated</p>
-                  <p className="text-[9px] font-mono text-neutral-400 mt-0.5">Your dynamic Google Sheets workbook has been created and populated successfully in your Drive.</p>
-                </div>
-                <a
-                  href={createdSpreadsheetUrl}
-                  target="_blank"
-                  referrerPolicy="no-referrer"
-                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-semibold text-[10px] uppercase font-mono rounded-lg transition-all shadow-lg shadow-emerald-500/10 inline-block text-center shrink-0"
-                >
-                  Open Google Sheet ↗
-                </a>
-              </div>
-            )}
-          </div>
+        </div>
 
           {/* GMAIL BROADCAST & COMMUNICATIONS HUB */}
-          <div className="mt-8 pt-6 border-t border-slate-200">
+          <div className="mt-8 pt-6 border-t border-[#262630]">
             <h4 className="text-sm font-bold text-[#0F172A] font-mono uppercase tracking-widest text-brand-red mb-4 flex items-center gap-2">
               <span className="w-1.5 h-1.5 bg-brand-red rounded-full animate-ping"></span>
               Gmail Broadcast & Communications Center
@@ -2566,13 +1924,13 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             )}
 
             {!gmailAuthorized ? (
-              <div className="p-5 border border-slate-200 rounded-2xl bg-slate-50 flex flex-col items-center justify-center text-center space-y-4">
+              <div className="p-5 border border-[#262630] rounded-2xl bg-[#0D0D0F] flex flex-col items-center justify-center text-center space-y-4">
                 <p className="text-xs text-[#64748B] font-mono leading-relaxed">
                   Link your primary Google Mail account to write customized workout digests, meal programs, or bio alerts directly from your command seat.
                 </p>
                 <button
                   onClick={handleTrainerGmailAuth}
-                  className="px-6 py-3 bg-white border border-[#dadce0] rounded-xl hover:bg-neutral-50 transition-all cursor-pointer flex items-center gap-2.5 shadow-sm active:scale-95"
+                  className="px-6 py-3 bg-[#141417] border border-[#dadce0] rounded-xl hover:bg-[#0D0D0F] transition-all cursor-pointer flex items-center gap-2.5 shadow-sm active:scale-95"
                 >
                   <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-5 h-5 shrink-0 block">
                     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
@@ -2584,8 +1942,8 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                 </button>
               </div>
             ) : (
-              <div className="space-y-4 border border-slate-100 p-5 rounded-2xl bg-slate-50/50">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="space-y-4 border border-[#262630] p-5 rounded-2xl bg-[#0D0D0F]/50">
+                <div className="flex items-center justify-between border-b border-[#262630] pb-3">
                   <div className="flex items-center space-x-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
                     <span className="text-xs font-mono font-bold text-emerald-600 uppercase tracking-widest">Coaching Channel Active</span>
@@ -2604,7 +1962,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     <select
                       value={trainerTargetEmail}
                       onChange={(e) => setTrainerTargetEmail(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono outline-none"
+                      className="w-full px-3 py-2 bg-[#141417] border border-[#262630] rounded-lg text-xs font-mono outline-none"
                     >
                       <option value="">-- Choose Athlete --</option>
                       {clients.map(cl => (
@@ -2619,7 +1977,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       type="text"
                       value={trainerEmailSubject}
                       onChange={(e) => setTrainerEmailSubject(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono outline-none"
+                      className="w-full px-3 py-2 bg-[#141417] border border-[#262630] rounded-lg text-xs font-mono outline-none"
                     />
                   </div>
                 </div>
@@ -2630,7 +1988,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     rows={5}
                     value={trainerEmailBody}
                     onChange={(e) => setTrainerEmailBody(e.target.value)}
-                    className="w-full p-3 bg-white border border-[#E2E8F0] rounded-lg text-xs font-mono outline-none leading-relaxed"
+                    className="w-full p-3 bg-[#141417] border border-[#262630] rounded-lg text-xs font-mono outline-none leading-relaxed"
                     placeholder="Enter email message body..."
                   />
                 </div>
@@ -2648,154 +2006,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             )}
           </div>
 
-          {/* GOOGLE DRIVE CABINET & FILE VAULT */}
-          <div className="mt-8 pt-6 border-t border-slate-200">
-            <h4 className="text-sm font-bold text-[#0F172A] font-mono uppercase tracking-widest text-brand-red mb-4 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-brand-red rounded-full animate-ping"></span>
-              Google Drive Performance Locker & Cabinet
-            </h4>
 
-            {driveError && (
-              <p className="mb-4 text-[10px] font-mono text-rose-500 font-bold uppercase tracking-wider bg-rose-500/10 p-3 rounded-lg border border-rose-500/20">
-                ⚠️ Drive Error: {driveError}
-              </p>
-            )}
-
-            {driveSuccess && (
-              <p className="mb-4 text-[10px] font-mono text-emerald-500 font-bold uppercase tracking-wider bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
-                ✓ System Success: {driveSuccess}
-              </p>
-            )}
-
-            {!driveAuthorized ? (
-              <div className="p-5 border border-slate-200 rounded-2xl bg-slate-50 flex flex-col items-center justify-center text-center space-y-4">
-                <p className="text-xs text-[#64748B] font-mono leading-relaxed">
-                  Link your primary Google Drive account to publish performance logs, store diet PDFs or write direct routine schedules dynamically.
-                </p>
-                <button
-                  onClick={handleTrainerDriveAuth}
-                  className="px-6 py-3 bg-white border border-[#dadce0] rounded-xl hover:bg-neutral-50 transition-all cursor-pointer flex items-center gap-2.5 shadow-sm active:scale-95"
-                >
-                  <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-5 h-5 shrink-0 block">
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-                  </svg>
-                  <span className="uppercase text-[#3C4043] font-mono text-[10px] font-bold tracking-wider">Link drive storage</span>
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4 border border-slate-100 p-5 rounded-2xl bg-slate-50/50">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div className="flex items-center space-x-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-                    <span className="text-xs font-mono font-bold text-emerald-600 uppercase tracking-widest">Drive Cabinet Connected</span>
-                  </div>
-                  <button
-                    onClick={handleTrainerDriveLogout}
-                    className="text-[10px] font-mono font-bold text-rose-500 hover:underline uppercase"
-                  >
-                    Disconnect Locker
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-1.5 md:col-span-1">
-                    <label className="text-[10px] font-mono text-[#64748B] uppercase block font-bold">Cabinet Destination Name</label>
-                    <input
-                      type="text"
-                      value={trainerDriveFileName}
-                      onChange={(e) => setTrainerDriveFileName(e.target.value)}
-                      placeholder="e.g. workout_schedule.txt"
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono outline-none"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5 md:col-span-2">
-                    <label className="text-[10px] font-mono text-[#64748B] uppercase block font-bold">Publish/Write Workout Material Content</label>
-                    <textarea
-                      rows={4}
-                      value={trainerDriveContent}
-                      onChange={(e) => setTrainerDriveContent(e.target.value)}
-                      className="w-full p-3 bg-white border border-[#E2E8F0] rounded-lg text-xs font-mono outline-none leading-relaxed"
-                      placeholder="Enter customized athletic text guidelines..."
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-2 flex justify-end">
-                  <button
-                    onClick={handleTrainerDriveUpload}
-                    disabled={driveSyncing}
-                    className="px-6 py-2.5 bg-neutral-900 hover:bg-neutral-850 text-white font-mono text-[10px] uppercase font-bold rounded-lg transition-all disabled:opacity-50 active:scale-95 shadow-sm inline-flex items-center gap-1.5"
-                  >
-                    {driveSyncing ? 'Storing...' : 'Archive Workout File to Drive'}
-                  </button>
-                </div>
-
-                <div className="space-y-2 border-t border-slate-100 pt-3">
-                  <span className="text-[9px] font-mono text-neutral-400 block uppercase tracking-wider font-bold">Search Cached Vault Material</span>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={driveQuery}
-                      onChange={(e) => setDriveQuery(e.target.value)}
-                      placeholder="Search (e.g. Speed Fit)"
-                      className="flex-1 px-3 py-1.5 border border-slate-250 bg-slate-50 rounded-lg text-xs font-mono outline-none"
-                    />
-                    <button
-                      onClick={handleTrainerFetchDriveFiles}
-                      disabled={driveSyncing}
-                      className="px-3 py-1.5 bg-neutral-900 hover:bg-neutral-850 text-white text-[9px] uppercase font-bold font-mono rounded-lg transition-all"
-                    >
-                      Filter
-                    </button>
-                  </div>
-
-                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                    {driveSyncing && (
-                      <div className="py-4 text-center text-[10px] font-mono text-neutral-400 animate-pulse uppercase">
-                        Fetching secure documents...
-                      </div>
-                    )}
-                    {!driveSyncing && driveFiles.length === 0 && (
-                      <div className="py-4 text-center text-[10px] font-mono text-neutral-400 uppercase">
-                        No stored templates detected.
-                      </div>
-                    )}
-                    {!driveSyncing && driveFiles.map((file) => (
-                      <div
-                        key={file.id}
-                        className="p-3 border border-slate-150 rounded-xl text-left bg-slate-50/50 hover:bg-slate-50 flex items-center justify-between gap-3"
-                      >
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <h4 className="font-bold text-[10px] text-slate-800 uppercase tracking-tight truncate flex items-center gap-1.5">
-                            {file.iconLink && <img src={file.iconLink} alt="" className="w-3.5 h-3.5 shrink-0 animate-pulse" referrerPolicy="no-referrer" />}
-                            {file.name}
-                          </h4>
-                          <p className="text-[9px] font-mono text-neutral-400">
-                            Size: {file.size ? `${(parseInt(file.size) / 1024).toFixed(1)} KB` : 'Template/Folder'} • {file.createdTime ? new Date(file.createdTime).toLocaleDateString() : ''}
-                          </p>
-                        </div>
-                        
-                        {file.webViewLink && (
-                          <a
-                            href={file.webViewLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-[9px] font-mono font-bold rounded uppercase tracking-wide shrink-0"
-                          >
-                            Open ↗
-                          </a>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       )}
 
@@ -2805,7 +2016,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: "easeOut" }}
-          className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm space-y-6"
+          className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6"
         >
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b pb-3 mb-3 gap-3">
             <div>
@@ -2834,7 +2045,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             <motion.div 
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
-              className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-4 text-xs font-mono"
+              className="bg-[#0D0D0F] border border-[#262630] p-5 rounded-2xl space-y-4 text-xs font-mono"
             >
               <div>
                 <h4 className="text-sm font-bold text-[#0F172A] font-display uppercase tracking-wider">Record Membership Payment</h4>
@@ -2889,7 +2100,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                 className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs"
               >
                 <div className="space-y-1 col-span-1 md:col-span-2">
-                  <label className="block text-[8px] font-bold text-neutral-400 uppercase">Package Template Presets</label>
+                  <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Package Template Presets</label>
                   <select
                     onChange={(e) => {
                       const val = e.target.value;
@@ -2935,12 +2146,12 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-[8px] font-bold text-neutral-400 uppercase">Select Athlete</label>
+                  <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Select Athlete</label>
                   <select
                     value={selectedAccountsClientId}
                     onChange={(e) => setSelectedAccountsClientId(e.target.value)}
                     required
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-[#0F172A]"
+                    className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A]"
                   >
                     <option value="">-- Choose Athlete --</option>
                     {clients.map(c => (
@@ -2950,32 +2161,32 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-[8px] font-bold text-neutral-400 uppercase">Billing Package Name</label>
+                  <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Billing Package Name</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. EMS 12-Sessions Membership"
                     value={quickPaymentData.package}
                     onChange={(e) => setQuickPaymentData({...quickPaymentData, package: e.target.value})}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-[#0F172A]"
+                    className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A]"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 col-span-1 md:col-span-2">
                   <div className="space-y-1">
-                    <label className="block text-[8px] font-bold text-neutral-400 uppercase">Amount (₹)</label>
+                    <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Amount (₹)</label>
                     <input
                       type="number"
                       required
                       placeholder="Amount in ₹"
                       value={quickPaymentData.amount}
                       onChange={(e) => setQuickPaymentData({...quickPaymentData, amount: e.target.value})}
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-[#0F172A] no-theme-override"
+                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A] no-theme-override"
                     />
                   </div>
                   
                   <div className="space-y-1">
-                    <label className="block text-[8px] font-bold text-neutral-400 uppercase">Rate per Session (₹)</label>
+                    <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Rate per Session (₹)</label>
                     <input
                       type="number"
                       placeholder="Enter Rate"
@@ -2986,12 +2197,12 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           const calculatedAmount = (parseFloat(rate) || 0) * (parseFloat(sessions) || 0);
                           setQuickPaymentData({...quickPaymentData, paymentRate: rate, amount: calculatedAmount.toString()});
                       }}
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-[#0F172A] no-theme-override"
+                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A] no-theme-override"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="block text-[8px] font-bold text-neutral-400 uppercase">Number of Sessions</label>
+                    <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Number of Sessions</label>
                     <input
                       type="number"
                       placeholder="Enter Sessions"
@@ -3002,12 +2213,12 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           const calculatedAmount = (parseFloat(rate) || 0) * (parseFloat(sessions) || 0);
                           setQuickPaymentData({...quickPaymentData, numberOfSessions: sessions, amount: calculatedAmount.toString()});
                       }}
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-[#0F172A] no-theme-override"
+                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A] no-theme-override"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="block text-[8px] font-bold text-neutral-400 uppercase">Billing Category / Package Type</label>
+                    <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Billing Category / Package Type</label>
                     <select
                       value={quickPaymentData.packageType}
                       onChange={(e) => {
@@ -3020,7 +2231,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           dueDate: format(addDays(new Date(quickPaymentData.startDate), days), 'yyyy-MM-dd')
                         });
                       }}
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-[#0F172A]"
+                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A]"
                     >
                       <option value="Monthly">Monthly</option>
                       <option value="Session-Based">Session-Based</option>
@@ -3031,34 +2242,34 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
                 <div className="grid grid-cols-2 gap-2 col-span-1 md:col-span-2">
                   <div className="space-y-1">
-                    <label className="block text-[8px] font-bold text-neutral-400 uppercase">Start Date</label>
+                    <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Start Date</label>
                     <input
                       type="date"
                       required
                       value={quickPaymentData.startDate}
                       onChange={(e) => setQuickPaymentData({...quickPaymentData, startDate: e.target.value})}
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-[#0F172A]"
+                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A]"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="block text-[8px] font-bold text-neutral-400 uppercase">Due Date</label>
+                    <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Due Date</label>
                     <input
                       type="date"
                       required
                       value={quickPaymentData.dueDate}
                       onChange={(e) => setQuickPaymentData({...quickPaymentData, dueDate: e.target.value})}
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-[#0F172A]"
+                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A]"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1 col-span-1 md:col-span-2">
-                  <label className="block text-[8px] font-bold text-neutral-400 uppercase">Receipt/Invoice Status</label>
+                  <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Receipt/Invoice Status</label>
                   <select
                     value={quickPaymentData.status}
                     onChange={(e) => setQuickPaymentData({...quickPaymentData, status: e.target.value as any})}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-[#0F172A]"
+                    className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A]"
                   >
                     <option value="Paid">Paid (Cash/Online Received)</option>
                     <option value="Pending">Pending (Invoice Dispatched)</option>
@@ -3081,7 +2292,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
           <div className="space-y-3">
             {paymentRecords.length === 0 ? (
-              <p className="p-8 text-center text-slate-400 font-mono text-xs border border-dashed rounded-2xl uppercase">No registered transaction dockets found.</p>
+              <p className="p-8 text-center text-[#A1A1AA] font-mono text-xs border border-dashed rounded-2xl uppercase">No registered transaction dockets found.</p>
             ) : (
               paymentRecords.map((record, i) => {
                 const clientObj = clients.find(c => c.id === record.clientId);
@@ -3093,7 +2304,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
                 // Determine badge for package details
                 const pType = record.packageType || 'Monthly';
-                let badgeStyle = "bg-purple-50 text-purple-700 border-purple-200";
+                let badgeStyle = "bg-brand-red/10 text-brand-red border-brand-red/20";
                 if (pType === 'Session-Based') {
                   badgeStyle = "bg-teal-50 text-teal-700 border-teal-200";
                 } else if (pType === '3 Months Transformation') {
@@ -3106,15 +2317,15 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.2, delay: i * 0.04 }}
                     key={record.id} 
-                    className="p-5 border border-slate-200 bg-white rounded-2xl text-xs font-mono transition-all hover:border-slate-300 hover:shadow-md"
+                    className="p-5 border border-[#262630] bg-[#141417] rounded-2xl text-xs font-mono transition-all hover:border-[#262630] hover:shadow-md"
                   >
                     {/* Header: Athlete Profile & Package Badge */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3 mb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#262630] pb-3 mb-3">
                       <div className="flex items-center space-x-3">
                         {clientObj.photoURL ? (
-                          <img src={clientObj.photoURL} alt={clientObj.name} className="w-8 h-8 rounded-full object-cover border border-slate-200" referrerPolicy="no-referrer" />
+                          <img src={clientObj.photoURL} alt={clientObj.name} className="w-8 h-8 rounded-full object-cover border border-[#262630]" referrerPolicy="no-referrer" />
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-500 text-[11px] uppercase">
+                          <div className="w-8 h-8 rounded-full bg-[#1E1E24] border border-[#262630] flex items-center justify-center font-bold text-[#A1A1AA] text-[11px] uppercase">
                             {clientObj.name ? clientObj.name[0] : 'U'}
                           </div>
                         )}
@@ -3128,7 +2339,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                         <span className={`px-2 py-0.5 text-[8px] font-bold uppercase rounded-md border ${badgeStyle}`}>
                           {pType}
                         </span>
-                        <span className="text-[10px] text-neutral-700 font-bold bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
+                        <span className="text-[10px] text-neutral-700 font-bold bg-[#1E1E24] border border-[#262630] px-2 py-0.5 rounded-md">
                           {record.package}
                         </span>
                       </div>
@@ -3138,14 +2349,14 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs py-1">
                       <div>
                         <span className="text-[8px] font-bold text-[#64748B] block uppercase tracking-wider mb-0.5">Start Date</span>
-                        <p className="text-neutral-800 font-medium">
+                        <p className="text-white font-medium">
                           {record.startDate ? format(new Date(record.startDate), 'MMM dd, yyyy') : '—'}
                         </p>
                       </div>
 
                       <div>
                         <span className="text-[8px] font-bold text-[#64748B] block uppercase tracking-wider mb-0.5">Due Date</span>
-                        <p className={`font-semibold ${record.status === 'Overdue' ? 'text-brand-red font-bold animate-pulse' : 'text-neutral-800'}`}>
+                        <p className={`font-semibold ${record.status === 'Overdue' ? 'text-brand-red font-bold animate-pulse' : 'text-white'}`}>
                           {record.dueDate ? format(new Date(record.dueDate), 'MMM dd, yyyy') : '—'}
                         </p>
                       </div>
@@ -3166,7 +2377,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     </div>
 
                     {/* Footer Actions & Status Sync Dropdown */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-4 pt-3 border-t border-slate-100 gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-4 pt-3 border-t border-[#262630] gap-3">
                       <div className="flex items-center space-x-2">
                         <span className="text-[9px] text-[#64748B] font-bold uppercase">LEDGER VALUE:</span>
                         <span className="text-sm font-bold text-[#0F172A]">₹{(Number(record.amount) || 0).toLocaleString('en-IN')}</span>
@@ -3222,7 +2433,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                                       <p style="font-size: 14px; color: #374151; line-height: 1.6;">
                                         This serves as a friendly reminder of your active Speed Fit performance contract installment dues.
                                       </p>
-                                      <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                                      <div style="background-color: #f9fafb; border: 1px solid #262630; padding: 15px; border-radius: 8px; margin: 15px 0;">
                                         <p style="margin: 0; font-size: 13px;"><strong>Membership Tier:</strong> ${record.package}</p>
                                         <p style="margin: 5px 0 0 0; font-size: 13px; color: #dc2626;"><strong>Outstanding Balance:</strong> ₹${parseFloat(record.amount || '0').toLocaleString('en-IN')}</p>
                                         <p style="margin: 5px 0 0 0; font-size: 12px; color: #6b7280;"><strong>Due Date:</strong> ${record.dueDate ? format(new Date(record.dueDate), 'MMMM dd, yyyy') : 'Immediate'}</p>
@@ -3230,7 +2441,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                                       <p style="font-size: 14px; color: #374151;">
                                         Kindly settle the dues to continue your workout slot.
                                       </p>
-                                      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+                                      <hr style="border: none; border-top: 1px solid #262630; margin: 20px 0;" />
                                       <p style="font-size: 10px; color: #9ca3af; font-family: monospace;">SPEED FIT CORE TRAINING TEAM</p>
                                     </div>
                                   `;
@@ -3254,7 +2465,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
                         <button 
                           onClick={() => exportPaymentReceiptToPDF(clientObj, record)}
-                          className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer text-slate-500 border border-transparent hover:border-slate-200"
+                          className="p-1.5 hover:bg-[#1E1E24] rounded-lg transition-colors cursor-pointer text-[#A1A1AA] border border-transparent hover:border-[#262630]"
                           title="Download Invoice/Receipt"
                         >
                           <Download className="w-3.5 h-3.5 shrink-0" />
@@ -3271,7 +2482,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                               }
                             }
                           }}
-                          className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-rose-100"
+                          className="p-1.5 hover:bg-rose-50 text-[#A1A1AA] hover:text-rose-600 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-rose-100"
                           title="Delete Record"
                         >
                           <Trash2 className="w-3.5 h-3.5 shrink-0" />
@@ -3289,8 +2500,11 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
       {/* 9. CALENDAR & SESSIONS TAB */}
       {currentTab === 'calendar' && (
         <div className="space-y-6">
+          {/* Live Google Calendar Integration */}
+          <GoogleCalendarIntegration sessions={sessions} clients={clients} />
+
           {/* Calendar scheduler sessions */}
-          <div className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm space-y-6">
+          <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6">
             <div>
               <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">UPCOMING BOOKINGS TIMELINE</h3>
               <p className="text-xs text-[#64748B] font-mono">Active booked EMS workout sessions currently scheduled.</p>
@@ -3304,12 +2518,12 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   const clientObj = clients.find(c => c.id === sess.clientId);
 
                   return (
-                    <div key={sess.id} className="p-3.5 border border-slate-200 bg-slate-50 rounded-xl flex items-center justify-between text-xs font-mono">
+                    <div key={sess.id} className="p-3.5 border border-[#262630] bg-[#0D0D0F] rounded-xl flex items-center justify-between text-xs font-mono">
                       <div>
                         <p className="font-bold text-[#0f172a] uppercase">{clientObj?.name || 'Class athlete'}</p>
                         <p className="text-[10px] text-[#64748B] mt-0.5">Time slot: {sess.time} on {sess.date}</p>
                       </div>
-                      <span className="text-[10px] uppercase font-bold text-brand-red bg-white border border-slate-200 px-2 rounded">CONFIRMED</span>
+                      <span className="text-[10px] uppercase font-bold text-brand-red bg-[#141417] border border-[#262630] px-2 rounded">CONFIRMED</span>
                     </div>
                   );
                 })
@@ -3319,7 +2533,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
           {/* Reschedule requests queue */}
           {rescheduleRequests.length > 0 && (
-            <div className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm space-y-6">
+            <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6">
               <div>
                 <h3 className="text-base font-bold text-[#0F172A] font-display uppercase tracking-wider">RESCHEDULING REQUEST QUEUE</h3>
                 <p className="text-xs text-[#64748B] font-mono">Requires trainer approval to relocate booking calendars.</p>
@@ -3330,7 +2544,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   const recruitObj = clients.find(c => c.id === req.clientId);
 
                   return (
-                    <div key={req.id} className="p-4 border border-[#E2E8F0] rounded-xl bg-slate-50 flex items-center justify-between text-xs font-mono">
+                    <div key={req.id} className="p-4 border border-[#262630] rounded-xl bg-[#0D0D0F] flex items-center justify-between text-xs font-mono">
                       <div>
                         <p className="font-bold text-brand-red uppercase">{recruitObj?.name || 'Athlete'}</p>
                         <p className="text-[10px] text-[#64748B] mt-0.5">Original date: {req.originalDate} / Requested date: {req.requestedDate}</p>
@@ -3356,8 +2570,8 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           className="space-y-6"
         >
           {/* HEADER SECTOR */}
-          <div className="bg-white border border-slate-200 p-6 rounded-[24px] shadow-sm space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#262630] pb-4">
               <div>
                 <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider flex items-center gap-2">
                   <span className="w-2.5 h-2.5 bg-brand-red rounded-full animate-ping"></span>
@@ -3396,14 +2610,14 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             </div>
 
             {/* DATE CHRONO INTERACTION */}
-            <div className="p-4 bg-slate-50/70 border border-slate-200/50 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="p-4 bg-[#0D0D0F]/70 border border-[#262630]/50 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="flex items-center space-x-2 w-full md:w-auto">
                 <button
                   onClick={() => {
                     const prev = subDays(new Date(focusedDate), 1);
                     setFocusedDate(format(prev, 'yyyy-MM-dd'));
                   }}
-                  className="p-2.5 bg-white border border-slate-200 hover:border-brand-red hover:text-brand-red rounded-xl font-bold transition-all text-xs cursor-pointer"
+                  className="p-2.5 bg-[#141417] border border-[#262630] hover:border-brand-red hover:text-brand-red rounded-xl font-bold transition-all text-xs cursor-pointer"
                 >
                   ◀ Prev Day
                 </button>
@@ -3412,7 +2626,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   type="date"
                   value={focusedDate}
                   onChange={(e) => setFocusedDate(e.target.value)}
-                  className="px-4 py-2 bg-white border border-slate-250 rounded-xl text-xs font-mono font-bold text-center outline-none focus:border-brand-red min-w-[150px] flex-1 md:flex-initial"
+                  className="px-4 py-2 bg-[#141417] border border-slate-250 rounded-xl text-xs font-mono font-bold text-center outline-none focus:border-brand-red min-w-[150px] flex-1 md:flex-initial"
                 />
 
                 <button
@@ -3420,7 +2634,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     const next = addDays(new Date(focusedDate), 1);
                     setFocusedDate(format(next, 'yyyy-MM-dd'));
                   }}
-                  className="p-2.5 bg-white border border-slate-200 hover:border-brand-red hover:text-brand-red rounded-xl font-bold transition-all text-xs cursor-pointer"
+                  className="p-2.5 bg-[#141417] border border-[#262630] hover:border-brand-red hover:text-brand-red rounded-xl font-bold transition-all text-xs cursor-pointer"
                 >
                   Next Day ▶
                 </button>
@@ -3444,7 +2658,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       className={`px-3 py-1.5 text-[9px] font-mono rounded-lg border font-bold uppercase transition-all shrink-0 ${
                         isCurrent 
                           ? 'bg-neutral-900 border-neutral-900 text-white' 
-                          : 'bg-white border-slate-200 hover:border-slate-350 text-[#64748B] hover:text-black'
+                          : 'bg-[#141417] border-[#262630] hover:border-slate-350 text-[#64748B] hover:text-black'
                       }`}
                     >
                       {preset.label}
@@ -3460,26 +2674,26 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                 { 
                   label: 'TOTAL ROSTER', 
                   val: clients.length, 
-                  color: 'text-neutral-900 border-slate-200' 
+                  color: 'text-white border-[#262630]' 
                 },
                 { 
                   label: 'PRESENT LOGS', 
                   val: attendanceRecords.filter(a => a.date === focusedDate && a.status === 'Present').length, 
-                  color: 'text-emerald-600 border-slate-200' 
+                  color: 'text-emerald-600 border-[#262630]' 
                 },
                 { 
                   label: 'MISSED LOGS', 
                   val: attendanceRecords.filter(a => a.date === focusedDate && a.status === 'Missed').length, 
-                  color: 'text-rose-600 border-slate-200' 
+                  color: 'text-rose-600 border-[#262630]' 
                 },
                 { 
                   label: 'UNREGISTERED', 
                   val: clients.length - attendanceRecords.filter(a => a.date === focusedDate).length, 
-                  color: 'text-amber-600 border-slate-200' 
+                  color: 'text-amber-600 border-[#262630]' 
                 }
               ].map((stat, sIdx) => (
-                <div key={sIdx} className={`p-4 border rounded-2xl bg-slate-50/30 text-center font-mono ${stat.color}`}>
-                  <p className="text-[8px] text-neutral-400 uppercase font-black tracking-widest">{stat.label}</p>
+                <div key={sIdx} className={`p-4 border rounded-2xl bg-[#0D0D0F]/30 text-center font-mono ${stat.color}`}>
+                  <p className="text-[8px] text-[#A1A1AA] uppercase font-black tracking-widest">{stat.label}</p>
                   <p className="text-xl font-bold mt-1">{stat.val}</p>
                 </div>
               ))}
@@ -3488,9 +2702,9 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
           {/* ACTIVE ROSTER CHECKER CARD */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-[24px] shadow-sm space-y-4">
+            <div className="lg:col-span-2 bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b pb-2">
-                <span className="text-xs font-mono font-bold text-neutral-900 uppercase tracking-widest">Active Athlete Registry Log</span>
+                <span className="text-xs font-mono font-bold text-white uppercase tracking-widest">Active Athlete Registry Log</span>
                 <span className="text-[10px] font-mono text-[#64748B]">Date Selected: {format(new Date(focusedDate), 'EEEE, MMMM dd, yyyy')}</span>
               </div>
 
@@ -3500,12 +2714,12 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   placeholder="Search Athlete Name or Email..."
                   value={attendanceFilterQuery}
                   onChange={(e) => setAttendanceFilterQuery(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono outline-none focus:border-brand-red"
+                  className="w-full px-3.5 py-2.5 bg-[#0D0D0F] border border-[#262630] rounded-xl text-xs font-mono outline-none focus:border-brand-red"
                 />
                 {attendanceFilterQuery && (
                   <button 
                     onClick={() => setAttendanceFilterQuery('')} 
-                    className="px-3 bg-slate-100 hover:bg-slate-200 text-[#64748B] text-xs font-mono font-bold rounded-xl"
+                    className="px-3 bg-[#1E1E24] hover:bg-slate-200 text-[#64748B] text-xs font-mono font-bold rounded-xl"
                   >
                     Clear
                   </button>
@@ -3530,14 +2744,14 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           ? 'border-emerald-500/30 bg-emerald-50/20' 
                           : isMissed 
                             ? 'border-rose-500/30 bg-rose-50/20' 
-                            : 'border-slate-200 bg-white'
+                            : 'border-[#262630] bg-[#141417]'
                       }`}
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center space-x-2">
                           <p className="font-bold text-[#0F172A] uppercase truncate">{client.name}</p>
                           {client.isActive === false && (
-                            <span className="px-1.5 py-0.5 text-[8px] bg-slate-100 text-slate-500 rounded uppercase font-black shrink-0">Inactive</span>
+                            <span className="px-1.5 py-0.5 text-[8px] bg-[#1E1E24] text-[#A1A1AA] rounded uppercase font-black shrink-0">Inactive</span>
                           )}
                         </div>
                         <p className="text-[10px] text-[#64748B] mt-0.5 truncate">{client.email}</p>
@@ -3550,7 +2764,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                               placeholder="e.g. 09:00 AM" 
                               value={logRecord.timing || ''} 
                               onChange={(e) => handleUpdateTiming(logRecord.id, e.target.value)}
-                              className="w-24 px-1.5 py-0.5 border border-slate-250 focus:border-brand-red rounded font-mono text-[10px] outline-none bg-white font-bold text-[#0F172A]"
+                              className="w-24 px-1.5 py-0.5 border border-slate-250 focus:border-brand-red rounded font-mono text-[10px] outline-none bg-[#141417] font-bold text-[#0F172A]"
                             />
                           </div>
                         )}
@@ -3562,18 +2776,18 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                             ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
                             : isMissed 
                               ? 'bg-rose-100 text-rose-800 border border-rose-300' 
-                              : 'bg-slate-150 text-slate-600 border border-slate-350'
+                              : 'bg-slate-150 text-[#A1A1AA] border border-slate-350'
                         }`}>
                           {logRecord ? logRecord.status.toUpperCase() : 'NOT LOGGED'}
                         </span>
 
-                        <div className="flex items-center border border-slate-200 bg-white rounded-lg p-0.5 overflow-hidden">
+                        <div className="flex items-center border border-[#262630] bg-[#141417] rounded-lg p-0.5 overflow-hidden">
                           <button
                             onClick={() => handleMarkAttendanceForDate(client.id, focusedDate, 'Present')}
                             className={`px-3 py-1.5 text-[9px] font-bold uppercase transition-all rounded-md ${
                               isPresent 
                                 ? 'bg-emerald-500 text-white shadow-sm' 
-                                : 'hover:bg-slate-100 text-emerald-600'
+                                : 'hover:bg-[#1E1E24] text-emerald-600'
                             }`}
                           >
                             ✓ Present
@@ -3583,7 +2797,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                             className={`px-3 py-1.5 text-[9px] font-bold uppercase transition-all rounded-md ${
                               isMissed 
                                 ? 'bg-rose-500 text-white shadow-sm' 
-                                : 'hover:bg-slate-100 text-rose-600'
+                                : 'hover:bg-[#1E1E24] text-rose-600'
                             }`}
                           >
                             ✗ Missed
@@ -3592,7 +2806,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                             <button
                               onClick={() => handleDeleteAttendanceRecord(logRecord.id)}
                               title="Clear Date Record"
-                              className="px-2 py-1.5 text-neutral-400 hover:text-rose-500 transition-colors border-l"
+                              className="px-2 py-1.5 text-[#A1A1AA] hover:text-rose-500 transition-colors border-l"
                             >
                               Reset
                             </button>
@@ -3606,7 +2820,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             </div>
 
             {/* WATCHLIST SYSTEM BAR */}
-            <div className="bg-white border border-slate-200 p-6 rounded-[24px] shadow-sm space-y-4">
+            <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-4">
               <div>
                 <h4 className="text-sm font-bold text-rose-600 font-display uppercase tracking-wider flex items-center gap-1.5">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -3648,7 +2862,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
                   if (watchlist.length === 0) {
                     return (
-                      <p className="text-xs text-[#64748B] font-mono font-bold uppercase text-center py-6 bg-slate-50 border border-dashed rounded-xl">
+                      <p className="text-xs text-[#64748B] font-mono font-bold uppercase text-center py-6 bg-[#0D0D0F] border border-dashed rounded-xl">
                         ✓ Clean slate! Zero athletic warnings.
                       </p>
                     );
@@ -3695,7 +2909,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                                   <p style="font-size: 14px; color: #4b5563; margin-top: 15px;">
                                     Please coordinate with our check-in panel immediately to reset schedules.
                                   </p>
-                                  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 25px 0;" />
+                                  <hr style="border: none; border-top: 1px solid #262630; margin: 25px 0;" />
                                   <p style="font-size: 10px; color: #9ca3af; font-family: monospace;">SPEED FIT CENTRAL HQ • COMPLIANCE CONTROL</p>
                                 </div>
                               `;
@@ -3734,7 +2948,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           className="space-y-6"
         >
           {/* TOP METRICS BOARD */}
-          <div className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm space-y-4">
+          <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-4">
             <div>
               <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">Speed Fit Financial Control Seat</h3>
               <p className="text-xs text-[#64748B] font-mono">Real-time calculations of paid athletic fees, overdue balances, and income pipelines.</p>
@@ -3742,7 +2956,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-[#050505] p-5 rounded-2xl border border-neutral-800">
-                <span className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider font-extrabold block">TOTAL CALCULATED REVENUE</span>
+                <span className="text-[9px] font-mono text-[#A1A1AA] uppercase tracking-wider font-extrabold block">TOTAL CALCULATED REVENUE</span>
                 <p className="text-2xl font-bold text-emerald-500 mt-1.5 font-display italic">₹
                   {paymentRecords
                     .reduce((sum, p) => sum + getPaidAmountForRecord(p), 0)
@@ -3752,7 +2966,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               </div>
 
               <div className="bg-[#050505] p-5 rounded-2xl border border-neutral-800">
-                <span className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider font-extrabold block">BALANCE OUTSTANDING TO GET</span>
+                <span className="text-[9px] font-mono text-[#A1A1AA] uppercase tracking-wider font-extrabold block">BALANCE OUTSTANDING TO GET</span>
                 <p className="text-2xl font-bold text-rose-500 mt-1.5 font-display italic">₹
                   {paymentRecords
                     .reduce((sum, p) => sum + getBalanceDueForRecord(p), 0)
@@ -3761,7 +2975,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                 <span className="text-[8px] font-mono text-rose-500/80 block mt-1 uppercase font-semibold font-bold">⚠️ Pending active collections</span>
               </div>
 
-              <div className="bg-slate-50 border border-slate-250 p-5 rounded-2xl flex flex-col justify-center space-y-2">
+              <div className="bg-[#0D0D0F] border border-slate-250 p-5 rounded-2xl flex flex-col justify-center space-y-2">
                 <div className="flex justify-between text-[9px] font-mono text-[#64748B] font-bold">
                   <span>COLLECTION RATE</span>
                   <span>
@@ -3792,7 +3006,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* LEDGER & NOTIFICATION LIST */}
-            <div className="lg:col-span-2 bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm space-y-4">
+            <div className="lg:col-span-2 bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-4">
               <div className="flex justify-between items-center border-b pb-2">
                 <span className="text-xs font-mono font-bold text-[#0F172A] uppercase tracking-wider">Athlete Accounts Balance Ledger</span>
                 <span className="text-[9px] font-mono text-[#64748B] font-bold">Total Clients: {clients.length}</span>
@@ -3805,7 +3019,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   placeholder="Search Athlete Invoice Ledger..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono outline-none"
+                  className="w-full px-3 py-2 bg-[#0D0D0F] border border-[#262630] rounded-xl text-xs font-mono outline-none"
                 />
               </div>
 
@@ -3821,7 +3035,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
                   // Package details & styling for the ledger
                   const pType = lastRec?.packageType || 'Monthly';
-                  let badgeStyle = "bg-purple-50 text-purple-700 border-purple-200";
+                  let badgeStyle = "bg-brand-red/10 text-brand-red border-brand-red/20";
                   if (pType === 'Session-Based') {
                     badgeStyle = "bg-teal-50 text-teal-700 border-teal-200";
                   } else if (pType === '3 Months Transformation') {
@@ -3831,12 +3045,12 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   return (
                     <div 
                       key={client.id}
-                      className="p-4 border border-slate-200 hover:border-slate-350 bg-slate-50/50 hover:bg-slate-50 rounded-2xl flex flex-col sm:flex-row justify-between gap-4 transition-colors font-mono text-xs"
+                      className="p-4 border border-[#262630] hover:border-slate-350 bg-[#0D0D0F]/50 hover:bg-[#0D0D0F] rounded-2xl flex flex-col sm:flex-row justify-between gap-4 transition-colors font-mono text-xs"
                     >
                       <div className="space-y-1 w-full sm:w-auto">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-bold text-[#0F172A] uppercase">{client.name}</p>
-                          <span className="text-slate-400">•</span>
+                          <span className="text-[#A1A1AA]">•</span>
                           <span className={`px-2 py-0.5 text-[8px] font-bold uppercase rounded border ${badgeStyle}`}>
                             {pType}
                           </span>
@@ -3851,7 +3065,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           </div>
                           <div>
                             <span className="text-[#64748B] block text-[8px] font-bold uppercase">BALANCE TO GET</span>
-                            <span className={totalBalance > 0 ? "text-rose-600 font-black animate-pulse" : "text-slate-400 font-bold"}>
+                            <span className={totalBalance > 0 ? "text-rose-600 font-black animate-pulse" : "text-[#A1A1AA] font-bold"}>
                               ₹{totalBalance.toLocaleString('en-IN')}
                             </span>
                           </div>
@@ -3910,7 +3124,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                                         This letter serves as a friendly reminder of your active Speed Fit performance contract dues.
                                         Our accounting ledger indicates an outstanding balanced payment amount as listed below:
                                       </p>
-                                      <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                                      <div style="background-color: #f9fafb; border: 1px solid #262630; padding: 15px; border-radius: 8px; margin: 15px 0;">
                                         <p style="margin: 0; font-size: 13px;"><strong>Membership Tier:</strong> ${lastRec?.package || 'EMS Active Transformation'}</p>
                                         <p style="margin: 5px 0 0 0; font-size: 13px; color: #dc2626;"><strong>Outstanding Balance to get:</strong> ₹${totalBalance.toLocaleString('en-IN')}</p>
                                         <p style="margin: 5px 0 0 0; font-size: 12px; color: #6b7280;"><strong>Due Date:</strong> ${lastRec?.dueDate ? format(new Date(lastRec.dueDate), 'MMMM dd, yyyy') : 'Immediate'}</p>
@@ -3918,7 +3132,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                                       <p style="font-size: 14px; color: #374151;">
                                         Kindly settle the dues in your checking pane or connect with Coach directly at gym desk.
                                       </p>
-                                      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+                                      <hr style="border: none; border-top: 1px solid #262630; margin: 20px 0;" />
                                       <p style="font-size: 10px; color: #9ca3af; font-family: monospace;">SPEED FIT ACCOUNTS DEPARTMENT</p>
                                     </div>
                                   `;
@@ -3945,7 +3159,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             </div>
 
             {/* REGISTER PAYMENT ENTRY FORM */}
-            <div className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm space-y-4">
+            <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-4">
               <div>
                 <span className="text-[10px] font-mono tracking-widest uppercase font-black text-brand-red block">COLLECTION MANAGER</span>
                 <h4 className="text-sm font-bold text-[#0F172A] font-display uppercase tracking-wider mt-0.5">Register Payment Entry</h4>
@@ -3998,12 +3212,12 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                 className="space-y-3 text-xs font-mono text-[#0F172A]"
               >
                 <div className="space-y-1">
-                  <label className="block text-[8px] font-bold text-neutral-400 uppercase">Select Athlete</label>
+                  <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Select Athlete</label>
                   <select
                     value={selectedAccountsClientId}
                     onChange={(e) => setSelectedAccountsClientId(e.target.value)}
                     required
-                    className="w-full p-2 bg-slate-50 border rounded-lg text-[#0F172A]"
+                    className="w-full p-2 bg-[#0D0D0F] border rounded-lg text-[#0F172A]"
                   >
                     <option value="">-- Choose Athlete --</option>
                     {clients.map(c => (
@@ -4013,36 +3227,36 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-[8px] font-bold text-neutral-400 uppercase">Billing Package Name</label>
+                  <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Billing Package Name</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. EMS 12-Sessions Membership"
                     value={quickPaymentData.package}
                     onChange={(e) => setQuickPaymentData({...quickPaymentData, package: e.target.value})}
-                    className="w-full p-2 bg-white border rounded-lg text-[#0F172A]"
+                    className="w-full p-2 bg-[#141417] border rounded-lg text-[#0F172A]"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="block text-[8px] font-bold text-neutral-400 uppercase">Amount (₹)</label>
+                    <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Amount (₹)</label>
                     <input
                       type="number"
                       required
                       placeholder="Amount in ₹"
                       value={quickPaymentData.amount}
                       onChange={(e) => setQuickPaymentData({...quickPaymentData, amount: e.target.value})}
-                      className="w-full p-2 bg-white border rounded-lg text-[#0F172A]"
+                      className="w-full p-2 bg-[#141417] border rounded-lg text-[#0F172A]"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="block text-[8px] font-bold text-neutral-400 uppercase">Duration</label>
+                    <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Duration</label>
                     <select
                       value={quickPaymentData.packageType}
                       onChange={(e) => setQuickPaymentData({...quickPaymentData, packageType: e.target.value as any})}
-                      className="w-full p-2 bg-slate-50 border rounded-lg text-[#0F172A]"
+                      className="w-full p-2 bg-[#0D0D0F] border rounded-lg text-[#0F172A]"
                     >
                       <option value="Monthly">Monthly</option>
                       <option value="Quarterly">Quarterly</option>
@@ -4054,34 +3268,34 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="block text-[8px] font-bold text-neutral-400 uppercase">Start Date</label>
+                    <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Start Date</label>
                     <input
                       type="date"
                       required
                       value={quickPaymentData.startDate}
                       onChange={(e) => setQuickPaymentData({...quickPaymentData, startDate: e.target.value})}
-                      className="w-full p-2 bg-white border rounded-lg text-[#0F172A]"
+                      className="w-full p-2 bg-[#141417] border rounded-lg text-[#0F172A]"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="block text-[8px] font-bold text-neutral-400 uppercase">Due Date</label>
+                    <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Due Date</label>
                     <input
                       type="date"
                       required
                       value={quickPaymentData.dueDate}
                       onChange={(e) => setQuickPaymentData({...quickPaymentData, dueDate: e.target.value})}
-                      className="w-full p-2 bg-white border rounded-lg text-[#0F172A]"
+                      className="w-full p-2 bg-[#141417] border rounded-lg text-[#0F172A]"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-[8px] font-bold text-neutral-400 uppercase">Receipt/Invoice Status</label>
+                  <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Receipt/Invoice Status</label>
                   <select
                     value={quickPaymentData.status}
                     onChange={(e) => setQuickPaymentData({...quickPaymentData, status: e.target.value as any})}
-                    className="w-full p-2 bg-slate-50 border rounded-lg text-[#0F172A]"
+                    className="w-full p-2 bg-[#0D0D0F] border rounded-lg text-[#0F172A]"
                   >
                     <option value="Paid">Paid (Cash/Online Received)</option>
                     <option value="Pending">Pending (Invoice Dispatched)</option>
@@ -4104,10 +3318,10 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
       {/* 10. TRAINING HQ SETTINGS TAB */}
       {currentTab === 'settings' && (
-        <div className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] shadow-sm space-y-6">
+        <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6">
           <div>
-            <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">COACH REGISTRY BIOGRAPHY</h3>
-            <p className="text-xs text-[#64748B] font-mono">Configure details visible on client panels detailing certifications.</p>
+            <h3 className="text-lg font-bold text-white font-display uppercase tracking-wider">COACH REGISTRY BIOGRAPHY & PROFILE</h3>
+            <p className="text-xs text-[#64748B] font-mono">Configure details visible on client panels detailing certifications and credentials.</p>
           </div>
 
           <form onSubmit={async (e) => {
@@ -4115,56 +3329,135 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             try {
               if (!userData?.uid) return;
               await firebaseService.updateUser(userData.uid, {
+                name: trainerBioForm.name,
+                phoneNumber: trainerBioForm.phoneNumber,
                 bio: trainerBioForm.bio,
                 specialties: trainerBioForm.specialties,
                 certifications: trainerBioForm.certifications,
-                experience: trainerBioForm.experience
+                experience: trainerBioForm.experience,
+                photoURL: trainerBioForm.photoURL,
+                avatar: trainerBioForm.photoURL
               });
-              alert('Profile settings successfully saved!');
+              alert('Profile settings and biography successfully saved & published!');
             } catch (err) {
               console.error(err);
               alert('Save failure, please check connection.');
             }
-          }} className="space-y-4 font-mono text-xs text-[#0F172A]">
+          }} className="space-y-4 font-mono text-xs text-white">
             
-            <div className="grid grid-cols-2 gap-4">
+            {/* Photo Upload Section */}
+            <div className="flex items-center gap-4 p-4 bg-[#0D0D0F] border border-neutral-800 rounded-2xl">
+              <div className="w-16 h-16 rounded-2xl overflow-hidden bg-neutral-900 border border-brand-red/40 flex items-center justify-center shrink-0">
+                {trainerBioForm.photoURL ? (
+                  <img src={trainerBioForm.photoURL} alt="Trainer" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="font-display italic text-2xl text-brand-red">
+                    {trainerBioForm.name?.[0]?.toUpperCase() || 'C'}
+                  </span>
+                )}
+              </div>
+              <div className="space-y-1">
+                <label className="block text-[9px] font-bold text-neutral-400 uppercase">Coach Profile Photo</label>
+                <label className="inline-block px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white text-[10px] uppercase font-bold rounded-lg cursor-pointer transition-all border border-neutral-700">
+                  {isUploadingPhoto ? 'Uploading...' : 'Upload New Photo'}
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file || !userData?.uid) return;
+                      try {
+                        setIsUploadingPhoto(true);
+                        const url = await firebaseService.uploadFile(file, `profiles/${userData.uid}`);
+                        setTrainerBioForm(prev => ({ ...prev, photoURL: url }));
+                        await firebaseService.updateUser(userData.uid, { photoURL: url, avatar: url });
+                        alert('Coach photo updated!');
+                      } catch (err) {
+                        console.error(err);
+                        alert('Photo upload failed.');
+                      } finally {
+                        setIsUploadingPhoto(false);
+                      }
+                    }}
+                    disabled={isUploadingPhoto}
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block text-[8px] font-bold text-[#64748B] uppercase">Full Name</label>
+                <input 
+                  type="text" 
+                  value={trainerBioForm.name}
+                  onChange={(e) => setTrainerBioForm({...trainerBioForm, name: e.target.value})}
+                  className="w-full p-2.5 bg-[#0D0D0F] border border-neutral-800 rounded-xl outline-none text-white focus:border-brand-red"
+                  placeholder="e.g., Chief Coach Alex"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-[8px] font-bold text-[#64748B] uppercase">Direct Phone Number</label>
+                <input 
+                  type="text" 
+                  value={trainerBioForm.phoneNumber}
+                  onChange={(e) => setTrainerBioForm({...trainerBioForm, phoneNumber: e.target.value})}
+                  className="w-full p-2.5 bg-[#0D0D0F] border border-neutral-800 rounded-xl outline-none text-white focus:border-brand-red"
+                  placeholder="e.g., +1 (555) 234-5678"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="block text-[8px] font-bold text-[#64748B] uppercase">Specialties & Focus Areas</label>
+                <input 
+                  type="text" 
+                  value={trainerBioForm.specialties}
+                  onChange={(e) => setTrainerBioForm({...trainerBioForm, specialties: e.target.value})}
+                  className="w-full p-2.5 bg-[#0D0D0F] border border-neutral-800 rounded-xl outline-none text-white focus:border-brand-red"
+                  placeholder="e.g., EMS Hypertrophy, Fat Loss"
+                />
+              </div>
               <div className="space-y-1">
                 <label className="block text-[8px] font-bold text-[#64748B] uppercase">Certifications & Credentials</label>
                 <input 
                   type="text" 
                   value={trainerBioForm.certifications}
                   onChange={(e) => setTrainerBioForm({...trainerBioForm, certifications: e.target.value})}
-                  className="w-full p-2.5 bg-slate-50 border rounded-xl outline-none"
+                  className="w-full p-2.5 bg-[#0D0D0F] border border-neutral-800 rounded-xl outline-none text-white focus:border-brand-red"
                   placeholder="e.g., EMS Specialist, ACE, NASM PES"
                 />
               </div>
               <div className="space-y-1">
-                <label className="block text-[8px] font-bold text-[#64748B] uppercase">Years of coaching experience</label>
+                <label className="block text-[8px] font-bold text-[#64748B] uppercase">Years of Experience</label>
                 <input 
                   type="text" 
                   value={trainerBioForm.experience}
                   onChange={(e) => setTrainerBioForm({...trainerBioForm, experience: e.target.value})}
-                  className="w-full p-2.5 bg-slate-50 border rounded-xl outline-none"
+                  className="w-full p-2.5 bg-[#0D0D0F] border border-neutral-800 rounded-xl outline-none text-white focus:border-brand-red"
                   placeholder="e.g., 8+ Years"
                 />
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className="block text-[8px] font-bold text-[#64748B] uppercase">Professional biography fields</label>
+              <label className="block text-[8px] font-bold text-[#64748B] uppercase">Professional Biography & Strategy</label>
               <textarea 
                 value={trainerBioForm.bio}
                 onChange={(e) => setTrainerBioForm({...trainerBioForm, bio: e.target.value})}
-                className="w-full p-2.5 bg-slate-50 border rounded-xl outline-none min-h-[100px]"
+                className="w-full p-2.5 bg-[#0D0D0F] border border-neutral-800 rounded-xl outline-none min-h-[100px] text-white focus:border-brand-red"
                 placeholder="Details of your clinical strategy and goals alignment philosophy..."
               />
             </div>
 
             <button 
               type="submit"
-              className="px-5 py-3 bg-brand-red hover:bg-red-700 text-white font-mono text-[9px] uppercase font-bold rounded-xl shadow-lg active:scale-95 transition-all outline-none"
+              className="px-6 py-3 bg-brand-red hover:bg-neutral-100 text-white hover:text-black font-mono text-[10px] uppercase font-black rounded-xl shadow-lg active:scale-95 transition-all outline-none"
             >
-              Commit Biography Changes
+              Commit & Publish Biography Changes
             </button>
           </form>
         </div>
@@ -4175,7 +3468,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <form 
             onSubmit={handleAddClient}
-            className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] max-w-sm w-full shadow-2xl space-y-4"
+            className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] max-w-sm w-full shadow-2xl space-y-4"
           >
             <div className="flex justify-between items-center border-b pb-2">
               <h3 className="text-sm font-bold text-[#0F172A] font-mono uppercase">ADD CLIENT PROFILE</h3>
@@ -4197,7 +3490,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   placeholder="Client full name..."
                   value={newClientData.name}
                   onChange={(e) => setNewClientData({...newClientData, name: e.target.value})}
-                  className="w-full p-2.5 bg-slate-50 border rounded-xl outline-none"
+                  className="w-full p-2.5 bg-[#0D0D0F] border rounded-xl outline-none"
                 />
               </div>
               <div className="space-y-1">
@@ -4208,7 +3501,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   placeholder="Registered email address..."
                   value={newClientData.email}
                   onChange={(e) => setNewClientData({...newClientData, email: e.target.value})}
-                  className="w-full p-2.5 bg-slate-50 border rounded-xl outline-none"
+                  className="w-full p-2.5 bg-[#0D0D0F] border rounded-xl outline-none"
                 />
               </div>
               <div className="space-y-1">
@@ -4219,7 +3512,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   placeholder="Password for initial login..."
                   value={newClientData.password}
                   onChange={(e) => setNewClientData({...newClientData, password: e.target.value})}
-                  className="w-full p-2.5 bg-slate-50 border rounded-xl outline-none"
+                  className="w-full p-2.5 bg-[#0D0D0F] border rounded-xl outline-none"
                 />
                 <p className="text-[9px] text-[#64748B] italic">The user can log in immediately using this initial credential.</p>
               </div>
@@ -4241,7 +3534,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <form 
             onSubmit={handleSaveTestimonial}
-            className="bg-white border border-[#E2E8F0] p-6 rounded-[24px] max-w-md w-full shadow-2xl space-y-4 font-mono text-xs"
+            className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] max-w-md w-full shadow-2xl space-y-4 font-mono text-xs"
           >
             <div className="flex justify-between items-center border-b pb-2">
               <h3 className="text-sm font-bold text-[#0F172A] uppercase">MANAGE TRANSFORMATION REVIEWS</h3>
@@ -4262,7 +3555,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   required
                   value={testimonialForm.clientName}
                   onChange={(e) => setTestimonialForm({...testimonialForm, clientName: e.target.value})}
-                  className="w-full p-2 bg-slate-50 border rounded-lg outline-none"
+                  className="w-full p-2 bg-[#0D0D0F] border rounded-lg outline-none"
                 />
               </div>
               <div className="space-y-1">
@@ -4271,7 +3564,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   type="email" 
                   value={testimonialForm.clientEmail}
                   onChange={(e) => setTestimonialForm({...testimonialForm, clientEmail: e.target.value})}
-                  className="w-full p-2 bg-slate-50 border rounded-lg outline-none"
+                  className="w-full p-2 bg-[#0D0D0F] border rounded-lg outline-none"
                 />
               </div>
             </div>
@@ -4282,7 +3575,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                 required
                 value={testimonialForm.bodyQuote}
                 onChange={(e) => setTestimonialForm({...testimonialForm, bodyQuote: e.target.value})}
-                className="w-full p-2 bg-slate-50 border rounded-lg outline-none min-h-[70px]"
+                className="w-full p-2 bg-[#0D0D0F] border rounded-lg outline-none min-h-[70px]"
                 placeholder="Details of client re-composition gains..."
               />
             </div>

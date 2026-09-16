@@ -1,5 +1,9 @@
 
-export const TRAINER_EMAILS = ['speedfit029@gmail.com', 'thousiefkhan298@gmail.com'];
+// The single admin/owner of this app. This account is always the TRAINER.
+export const ADMIN_EMAIL = 'thousiefkhan298@gmail.com';
+
+// Accounts allowed trainer access. ADMIN_EMAIL must always be first.
+export const TRAINER_EMAILS = [ADMIN_EMAIL, 'speedfit029@gmail.com'];
 
 export const TERMS_AND_CONDITIONS = `This agreement is between Speed Fit Personal Training and the client for fitness training services.
 

@@ -1,25 +1,6 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: users
-    // Document ID: {uid}
-    // Fields:
-    //   - uid: string (required)
-    //   - email: string (required, email format)
-    //   - name: string (optional)
-    //   - role: string (required, TRAINER|CLIENT)
-    //   - onboardingCompleted: bool (optional)
-    //   - createdAt: string (optional, date-time)
-    //   - status: string (optional, Active|Inactive)
-    //   - phoneNumber: string (optional)
-    //
-    // [Other collections follow similar patterns based on firebase-blueprint.json]
-    //
-    // ===============================================================
 
     // ===============================================================
     // Helper Functions
@@ -31,13 +12,21 @@ service cloud.firestore {
     function isEmailVerified() {
       return isAuthenticated() && request.auth.token.email_verified == true;
     }
-    
-    function isOwner(uid) {
-       return isAuthenticated() && request.auth.uid == uid;
+
+    // Checking if the requested email lower case matches trainers
+    function isTrainerEmail(email) {
+      return email != null && (
+        email == 'thousiefkhan298@gmail.com' || 
+        email == 'speedfit029@gmail.com' || 
+        email == 'thousiefk@gmail.com' ||
+        email.lower() == 'thousiefkhan298@gmail.com' ||
+        email.lower() == 'speedfit029@gmail.com' ||
+        email.lower() == 'thousiefk@gmail.com'
+      );
     }
 
-    function isTrainerEmail(email) {
-      return email != null && (email == 'thousiefkhan298@gmail.com' || email == 'speedfit029@gmail.com' || email == 'thousiefk@gmail.com');
+    function isOwner(uid) {
+       return isAuthenticated() && request.auth.uid == uid;
     }
 
     function isTrainer() {
@@ -47,6 +36,13 @@ service cloud.firestore {
          request.auth.uid == 'another_trainer_uid' ||
          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'TRAINER')
        );
+    }
+
+    // Role is a privilege boundary and cannot be self-assigned.
+    function grantsTrainerRole(data) {
+      return data.role != 'TRAINER' ||
+             isTrainer() ||
+             (request.auth.token.email != null && isTrainerEmail(request.auth.token.email.lower()));
     }
 
     function isValidId(id) {
@@ -60,8 +56,9 @@ service cloud.firestore {
       return email is string && email.size() <= 256 && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
 
+    // Support standard date-time formats
     function isValidDateTime(dt) {
-      return dt is string && dt.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$") && dt.size() <= 50;
+      return dt is string && dt.size() <= 60;
     }
 
     function isValidDate(d) {
@@ -93,6 +90,9 @@ service cloud.firestore {
              (!('concern' in data) || data.concern is map) &&
              (!('healthAssessment' in data) || data.healthAssessment is map) &&
              (!('fitnessAssessment' in data) || data.fitnessAssessment is map) &&
+             (!('googleLinked' in data) || data.googleLinked is bool) &&
+             (!('isMigrated' in data) || data.isMigrated is bool) &&
+             (!('migratedTo' in data) || data.migratedTo is string) &&
              data.keys().size() <= 40;
     }
 
@@ -102,19 +102,16 @@ service cloud.firestore {
              isValidDateTime(data.updatedAt) &&
              (!('height' in data) || data.height is string) &&
              (!('weight' in data) || data.weight is string) &&
-             data.keys().size() <= 30;
+             data.keys().size() <= 40;
     }
 
+    // Looser size to allow all fields
     function isValidFitnessAssessment(data) {
       return data.keys().hasAll(['clientId', 'updatedAt', 'date']) &&
              isValidId(data.clientId) &&
              isValidDateTime(data.updatedAt) &&
              isValidDate(data.date) &&
-             (!('bodyFat' in data) || data.bodyFat is map) &&
-             (!('circumference' in data) || data.circumference is map) &&
-             (!('movementScreen' in data) || data.movementScreen is map) &&
-             (!('physicalTests' in data) || data.physicalTests is map) &&
-             data.keys().size() <= 40;
+             data.keys().size() <= 50;
     }
 
     function isValidWorkoutLog(data) {
@@ -128,7 +125,7 @@ service cloud.firestore {
       return data.keys().hasAll(['clientId', 'date', 'status']) &&
              data.clientId is string &&
              isValidDate(data.date) &&
-             data.status in ['Present', 'Missed'];
+             data.status in ['Present', 'Missed', 'Absent', 'Cancelled', 'Rescheduled', 'Late'];
     }
 
     function isValidMessage(data) {
@@ -152,7 +149,7 @@ service cloud.firestore {
              (!('durationWeeks' in data) || data.durationWeeks is string) &&
              (!('imageUrl' in data) || data.imageUrl is string) &&
              (!('achievement' in data) || data.achievement is string) &&
-             data.keys().size() <= 15;
+             data.keys().size() <= 20;
     }
 
     // ===============================================================
@@ -161,17 +158,18 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if isOwner(uid) || isTrainer() || (isAuthenticated() && request.auth.token.email.lower() == resource.data.email.lower()) || (isAuthenticated() && resource.data.role == 'TRAINER');
-      allow create: if (isOwner(uid) || isTrainer()) && isValidUser(request.resource.data) && request.resource.data.uid == uid;
-      allow update: if (isOwner(uid) || isTrainer()) && isValidUser(request.resource.data) && request.resource.data.uid == uid && 
+      allow create: if (isOwner(uid) || isTrainer()) && isValidUser(request.resource.data) && request.resource.data.uid == uid &&
+                    grantsTrainerRole(request.resource.data);
+      allow update: if (isOwner(uid) || isTrainer()) && isValidUser(request.resource.data) && request.resource.data.uid == uid &&
                     (isTrainer() || request.resource.data.role == resource.data.role);
       allow delete: if isTrainer() || (isAuthenticated() && request.auth.token.email.lower() == resource.data.email.lower());
     }
 
     match /workoutLogs/{docId} {
       allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
-      allow create: if isAuthenticated() && isValidWorkoutLog(request.resource.data) && 
+      allow create: if isAuthenticated() && isValidWorkoutLog(request.resource.data) &&
                     (isTrainer() || request.resource.data.clientId == request.auth.uid);
-      allow update: if isAuthenticated() && isValidWorkoutLog(request.resource.data) && 
+      allow update: if isAuthenticated() && isValidWorkoutLog(request.resource.data) &&
                     (isTrainer() || resource.data.clientId == request.auth.uid);
       allow delete: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
     }
@@ -191,10 +189,11 @@ service cloud.firestore {
       allow create, update, delete: if isTrainer();
     }
 
+    // Messages rules
     match /messages/{docId} {
       allow read: if isAuthenticated() && (request.auth.uid in resource.data.participants || isTrainer());
-      allow create: if isAuthenticated() && isValidMessage(request.resource.data) && 
-                    (request.auth.uid == request.resource.data.senderId || isTrainer() || 
+      allow create: if isAuthenticated() && isValidMessage(request.resource.data) &&
+                    (request.auth.uid == request.resource.data.senderId || isTrainer() ||
                      (request.resource.data.senderId == 'SYSTEM' && request.resource.data.receiverId == request.auth.uid));
       allow update: if isAuthenticated() && (request.auth.uid in resource.data.participants || isTrainer());
       allow delete: if isTrainer();
@@ -253,18 +252,14 @@ service cloud.firestore {
     match /healthAssessments/{docId} {
       allow read: if isAuthenticated() && (isTrainer() || resource.data.clientId == request.auth.uid);
       allow create: if isAuthenticated() && (isTrainer() || incoming().clientId == request.auth.uid) && isValidHealthAssessment(incoming());
-      allow update: if isAuthenticated() && (isTrainer() || resource.data.clientId == request.auth.uid) && isValidHealthAssessment(incoming()) && (
-        isTrainer() || incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt', 'height', 'weight', 'waist', 'bloodPressure', 'stress', 'occupation', 'conditions', 'goals', 'notes', 'otherConditions', 'smoking', 'alcohol', 'sleepHours', 'currentlyActive', 'pastExperience', 'trainingDaysPerWeek', 'targetWeight', 'targetDate', 'painActivities', 'medications', 'confirmed', 'consentGiven', 'healthConcerns'])
-      );
+      allow update: if isAuthenticated() && (isTrainer() || resource.data.clientId == request.auth.uid) && isValidHealthAssessment(incoming());
       allow delete: if isTrainer();
     }
 
     match /fitnessAssessments/{docId} {
       allow read: if isAuthenticated() && (isTrainer() || resource.data.clientId == request.auth.uid);
       allow create: if isAuthenticated() && (isTrainer() || incoming().clientId == request.auth.uid) && isValidFitnessAssessment(incoming());
-      allow update: if isAuthenticated() && (isTrainer() || resource.data.clientId == request.auth.uid) && isValidFitnessAssessment(incoming()) && (
-        isTrainer() || incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt', 'date', 'dob', 'gender', 'assessNum', 'admin', 'height', 'weight', 'bodyFat', 'circumference', 'movementScreen', 'physicalTests', 'postureAnalysis', 'notes'])
-      );
+      allow update: if isAuthenticated() && (isTrainer() || resource.data.clientId == request.auth.uid) && isValidFitnessAssessment(incoming());
       allow delete: if isTrainer();
     }
 

@@ -3,7 +3,38 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
+import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import { initMcpServer } from "./src/mcpServer.js";
+
+// Firebase applet configuration (project id + named Firestore database id)
+let appletConfig: any = {};
+try {
+  appletConfig = JSON.parse(fs.readFileSync("./firebase-applet-config.json", "utf8"));
+} catch (e: any) {
+  console.warn("Could not read firebase-applet-config.json:", e.message);
+}
+const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || appletConfig.projectId;
+const FIRESTORE_DATABASE_ID = appletConfig.firestoreDatabaseId;
+
+if (!FIRESTORE_DATABASE_ID) {
+  console.error("CONFIG ERROR: firestoreDatabaseId is missing from firebase-applet-config.json. The backend would fall back to the (default) database, which does not exist in this project.");
+}
+
+// Initialize Firebase Admin securely
+try {
+  if (FIREBASE_PROJECT_ID) {
+    admin.initializeApp({
+      projectId: FIREBASE_PROJECT_ID,
+    });
+    console.log("Firebase Admin initialized for project " + FIREBASE_PROJECT_ID + " (database: " + (FIRESTORE_DATABASE_ID || "(default)") + ").");
+  } else {
+    admin.initializeApp();
+    console.log("Firebase Admin initialized with default configuration.");
+  }
+} catch (e: any) {
+  console.warn("Firebase Admin already initialized or could not be initialized:", e.message);
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,7 +51,7 @@ const ai = new GoogleGenAI({
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
   // Add JSON parser middleware with a safe size limit
   app.use(express.json({ limit: "20mb" }));
@@ -31,6 +62,26 @@ async function startServer() {
   // Root health check
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // Secure database check endpoint using firebase-admin to satisfy requirements
+  app.get("/api/admin/db-check", async (req, res) => {
+    try {
+      const dbAdmin = getFirestore(admin.app(), FIRESTORE_DATABASE_ID);
+      const usersSnap = await dbAdmin.collection("users").limit(1).get();
+      res.json({
+        success: true,
+        message: "Firebase Admin is fully configured and connected to Firestore.",
+        usersFound: !usersSnap.empty
+      });
+    } catch (err: any) {
+      console.warn("Firebase Admin check failed, falling back gracefully:", err.message);
+      res.json({
+        success: false,
+        message: "Firebase Admin configuration check failed, but fallback is handled: " + err.message,
+        usersFound: false
+      });
+    }
   });
 
   // Initialize Model Context Protocol (MCP) server endpoints

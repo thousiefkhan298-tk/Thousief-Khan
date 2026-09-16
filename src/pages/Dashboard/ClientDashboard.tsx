@@ -49,9 +49,8 @@ import { format, subDays, isSameDay } from 'date-fns';
 import { motion } from 'motion/react';
 import { exportPaymentReceiptToPDF, exportAITransformationReportToPDF, exportClientToPDF } from '../../utils/pdfExporter.js';
 import { calculateHealthMetrics, getBMIBarPercent, getBMIColor } from '../../utils/healthCalculations';
-import { authorizeGoogleSheets, createGoogleSpreadsheet, updateSheetValues } from '../../services/googleSheetsService.js';
 import { isGmailAuthorized, authorizeGmail, sendGmailEmail, listGmailMessages, getGmailMessageDetails, clearGmailAuthorization } from '../../services/gmailService.js';
-import { isDriveAuthorized, authorizeDrive, listDriveFiles, uploadTextToDrive, clearDriveAuthorization, DriveFile } from '../../services/googleDriveService.js';
+import { GoogleCalendarIntegration } from '../../components/GoogleCalendarIntegration.js';
 
 
 const DEFAULT_WORKOUT_SEGMENTS = [
@@ -167,11 +166,6 @@ const ClientDashboard: React.FC<Props> = ({ userData }) => {
   const [isUploadingProgress, setIsUploadingProgress] = useState(false);
   const [progressCategory, setProgressCategory] = useState<'transformation' | 'diet' | 'general'>('transformation');
   
-  // Google Sheets integration state variables
-  const [sheetsSyncing, setSheetsSyncing] = useState<boolean>(false);
-  const [sheetsError, setSheetsError] = useState<string | null>(null);
-  const [createdSpreadsheetUrl, setCreatedSpreadsheetUrl] = useState<string | null>(null);
-  
   // Gmail integration state variables
   const [gmailSyncing, setGmailSyncing] = useState<boolean>(false);
   const [gmailError, setGmailError] = useState<string | null>(null);
@@ -181,14 +175,6 @@ const ClientDashboard: React.FC<Props> = ({ userData }) => {
   const [gmailQuery, setGmailQuery] = useState<string>("Speed Fit");
   const [selectedMail, setSelectedMail] = useState<any | null>(null);
   const [loadingMailDetails, setLoadingMailDetails] = useState<boolean>(false);
-  
-  // Google Drive integration state variables
-  const [driveSyncing, setDriveSyncing] = useState<boolean>(false);
-  const [driveError, setDriveError] = useState<string | null>(null);
-  const [driveSuccess, setDriveSuccess] = useState<string | null>(null);
-  const [driveAuthorized, setDriveAuthorized] = useState<boolean>(false);
-  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
-  const [driveQuery, setDriveQuery] = useState<string>("Speed Fit");
   
   // Interactive Checklist states (Stored in LocalStorage to maintain consistency during session)
   const [completedWorkoutToday, setCompletedWorkoutToday] = useState(() => {
@@ -681,53 +667,6 @@ const ClientDashboard: React.FC<Props> = ({ userData }) => {
     }
   };
 
-  const handleSyncWorkoutsToSheets = async () => {
-    setSheetsSyncing(true);
-    setSheetsError(null);
-    setCreatedSpreadsheetUrl(null);
-    try {
-      const token = await authorizeGoogleSheets();
-
-      const headers = ['Workout Date', 'Exercise Name', 'Sets', 'Reps/Time', 'Weight (lbs/kg)', 'Coach Feedback / Notes'];
-      const rows: any[][] = [];
-
-      recentLogs.forEach(log => {
-        const dateStr = log.date ? new Date(log.date).toLocaleDateString() : 'N/A';
-        const notesStr = log.notes || 'N/A';
-        if (log.entries && Array.isArray(log.entries) && log.entries.length > 0) {
-          log.entries.forEach(entry => {
-            rows.push([
-              dateStr,
-              entry.exercise || 'Exercise Logged',
-              entry.sets || 'N/A',
-              entry.reps || 'N/A',
-              entry.weight || 'N/A',
-              notesStr
-            ]);
-          });
-        } else {
-          rows.push([dateStr, 'General Progress Logged', 'N/A', 'N/A', 'N/A', notesStr]);
-        }
-      });
-
-      const values = [headers, ...rows];
-
-      const { spreadsheetId, spreadsheetUrl } = await createGoogleSpreadsheet(
-        `Speed Fit - Workout History - ${userData?.name || 'My Progress'}`,
-        ['Progress'],
-        token
-      );
-
-      await updateSheetValues(spreadsheetId, 'Progress!A1', values, token);
-      setCreatedSpreadsheetUrl(spreadsheetUrl);
-    } catch (err: any) {
-      console.error(err);
-      setSheetsError(err.message || 'Error occurred during spreadsheet synchronization.');
-    } finally {
-      setSheetsSyncing(false);
-    }
-  };
-
   // Gmail integration handlers
   const handleGmailAuth = async () => {
     try {
@@ -842,95 +781,11 @@ const ClientDashboard: React.FC<Props> = ({ userData }) => {
     setGmailSuccess(null);
   };
 
-  // Google Drive integration handlers
-  const handleDriveAuth = async () => {
-    try {
-      setDriveError(null);
-      await authorizeDrive();
-      setDriveAuthorized(true);
-      await handleFetchDriveFiles();
-    } catch (err: any) {
-      console.error(err);
-      setDriveError(err.message || 'Google Drive OAuth authorization failed.');
-    }
-  };
-
-  const handleFetchDriveFiles = async () => {
-    setDriveSyncing(true);
-    setDriveError(null);
-    try {
-      const files = await listDriveFiles(driveQuery);
-      setDriveFiles(files);
-    } catch (err: any) {
-      console.error(err);
-      setDriveError('Failed to list files: ' + (err.message || err));
-    } finally {
-      setDriveSyncing(false);
-    }
-  };
-
-  const handleDriveUploadBackup = async () => {
-    setDriveSyncing(true);
-    setDriveError(null);
-    setDriveSuccess(null);
-    try {
-      const userName = userData?.name || 'Athletic Member';
-      const weightText = userData?.healthAssessment?.weight ? `${userData.healthAssessment.weight} kg` : 'Not specified';
-      const bmiText = userData?.healthAssessment?.bmi ? Number(userData.healthAssessment.bmi).toFixed(1) : 'Not specified';
-      const timestampString = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
-      
-      const markdownContent = `SPEED FIT ATHLETIC PERFORMANCE PROFILE BACKUP
-============================================
-Generated: ${timestampString}
-Target Athlete: ${userName}
-Profile Email: ${userData?.email || 'N/A'}
-
-CURRENT BIOMETRIC MATRIX:
--------------------------
-- Body Weight Checked: ${weightText}
-- Calculated BMI: ${bmiText}
-- Core Onboarding Standing: Active Elite status
-
-CLINICAL ATHLETE GOALS:
------------------------
-1. Daily progressive resistance logs
-2. Strict hydration check (2L+ active guidelines)
-3. Direct Coach Sync
-
-CONFIDENTIAL DOCUMENT
-For verification and recovery purposes. Securely dispatched to your Google Drive via Speed Fit Integrated Cloud Portal.
-`;
-
-      const fileName = `Speed_Fit_Biometrics_${format(new Date(), 'yyyyMMdd_HHmmss')}.txt`;
-      await uploadTextToDrive(fileName, markdownContent, 'text/plain');
-      setDriveSuccess(`Successfully backed up physical metadata file "${fileName}" directly to your Google Drive!`);
-      await handleFetchDriveFiles();
-    } catch (err: any) {
-      console.error(err);
-      setDriveError(err.message || 'Drive file upload failed.');
-    } finally {
-      setDriveSyncing(false);
-    }
-  };
-
-  const handleDriveLogout = () => {
-    clearDriveAuthorization();
-    setDriveAuthorized(false);
-    setDriveFiles([]);
-    setDriveSuccess(null);
-  };
-
   useEffect(() => {
     const isGmailAuth = isGmailAuthorized();
     setGmailAuthorized(isGmailAuth);
     if (isGmailAuth) {
       handleFetchGmailMessages();
-    }
-
-    const isDrAuth = isDriveAuthorized();
-    setDriveAuthorized(isDrAuth);
-    if (isDrAuth) {
-      handleFetchDriveFiles();
     }
   }, []);
 
@@ -2078,6 +1933,9 @@ For verification and recovery purposes. Securely dispatched to your Google Drive
       {/* 5. PROFILE VIEW */}
       {currentTab === 'profile' && (
         <div className="space-y-8">
+          {/* Google Calendar Sync */}
+          <GoogleCalendarIntegration sessions={sessions} />
+
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 border-b border-slate-200 pb-5">
             <div>
               <p className="text-brand-red font-mono text-[10px] uppercase tracking-widest font-bold">PRESTIGE RECRUIT REGISTRY</p>
@@ -2302,39 +2160,7 @@ For verification and recovery purposes. Securely dispatched to your Google Drive
                 </div>
               </div>
 
-              <div className="bg-white border border-[#E2E8F0] p-5 rounded-[24px] shadow-sm space-y-4">
-                <span className="text-[10px] font-mono text-[#64748B] uppercase tracking-wider font-bold">GOOGLE SHEETS REAL-TIME INTEGRATION</span>
-                <p className="text-[11px] text-neutral-400 font-mono mt-0.5">
-                  Sync and compile your full physical workout log and athletic performance matrix directly into a secure spreadsheet.
-                </p>
-                <button
-                  disabled={sheetsSyncing}
-                  onClick={handleSyncWorkoutsToSheets}
-                  className="w-full py-2.5 bg-neutral-900 hover:bg-neutral-800 text-white border border-neutral-700 font-mono text-[9px] uppercase font-bold rounded-lg transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {sheetsSyncing ? 'Linking & Syncing...' : 'Sync Workout Diaries'}
-                </button>
 
-                {sheetsError && (
-                  <p className="text-[11px] font-mono text-rose-500 font-bold uppercase tracking-wider bg-rose-500/10 p-2 rounded border border-rose-500/20">
-                    ⚠️ {sheetsError}
-                  </p>
-                )}
-
-                {createdSpreadsheetUrl && (
-                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl space-y-2 text-center">
-                    <p className="text-[10px] font-bold text-emerald-400 uppercase">✓ Grid Export Complete</p>
-                    <a
-                      href={createdSpreadsheetUrl}
-                      target="_blank"
-                      referrerPolicy="no-referrer"
-                      className="block text-center py-1.5 bg-emerald-500 hover:bg-emerald-600 text-black font-mono text-[9px] uppercase font-bold rounded"
-                    >
-                      Open Workbook ↗
-                    </a>
-                  </div>
-                )}
-              </div>
 
               {/* GMAIL SECURE INTEGRATIONS CHANNEL */}
               <div className="bg-white border border-[#E2E8F0] p-5 rounded-[24px] shadow-sm space-y-4">
@@ -2447,129 +2273,7 @@ For verification and recovery purposes. Securely dispatched to your Google Drive
                         ))}
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-
-              {/* GOOGLE DRIVE ARCHIVE VAULT */}
-              <div className="bg-white border border-[#E2E8F0] p-5 rounded-[24px] shadow-sm space-y-4">
-                <span className="text-[10px] font-mono text-[#64748B] uppercase tracking-wider font-bold">GOOGLE DRIVE VAULT</span>
-                <p className="text-[11px] text-neutral-400 font-mono mt-0.5 leading-relaxed">
-                  Link your Drive account to archive athletic bio logs, retrieve custom program maps, or back up physical logs securely.
-                </p>
-
-                {driveError && (
-                  <p className="text-[10px] font-mono text-rose-500 font-bold uppercase tracking-wider bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
-                    ⚠️ {driveError}
-                  </p>
-                )}
-
-                {driveSuccess && (
-                  <p className="text-[10px] font-mono text-emerald-500 font-bold uppercase tracking-wider bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20">
-                    ✓ {driveSuccess}
-                  </p>
-                )}
-
-                {!driveAuthorized ? (
-                  <button
-                    onClick={handleDriveAuth}
-                    disabled={driveSyncing}
-                    className="w-full shadow-sm py-3 border border-[#dadce0] rounded-xl hover:bg-neutral-50 transition-all cursor-pointer flex items-center justify-center gap-2.5 bg-white scale-100 active:scale-95"
-                  >
-                    <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-5 h-5 shrink-0 block">
-                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-                      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-                      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-                    </svg>
-                    <span className="uppercase text-[#3C4043] font-mono text-[10px] font-bold tracking-wider">Connect Drive Cabinet</span>
-                  </button>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl">
-                      <div className="flex items-center space-x-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                        <span className="text-[9px] font-mono font-bold text-emerald-500 uppercase tracking-widest">Drive Active</span>
-                      </div>
-                      <button
-                        onClick={handleDriveLogout}
-                        className="text-[9px] font-mono font-bold text-rose-500 hover:underline uppercase"
-                      >
-                        Disconnect
-                      </button>
-                    </div>
-
-                    <div className="space-y-2">
-                      <span className="text-[9px] font-mono text-neutral-400 block uppercase tracking-wider font-bold">Biometric Cloud Backup</span>
-                      <button
-                        onClick={handleDriveUploadBackup}
-                        disabled={driveSyncing}
-                        className="w-full py-2 bg-neutral-900 hover:bg-neutral-850 text-white font-mono text-[9px] uppercase font-bold rounded-lg transition-all disabled:opacity-50 active:scale-95 shadow-sm"
-                      >
-                        {driveSyncing ? 'Synchronizing...' : 'Upload Current Biometrics Backup to Drive'}
-                      </button>
-                    </div>
-
-                    <div className="space-y-2 border-t border-slate-100 pt-3">
-                      <span className="text-[9px] font-mono text-neutral-400 block uppercase tracking-wider font-bold">Search Vault Files</span>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={driveQuery}
-                          onChange={(e) => setDriveQuery(e.target.value)}
-                          placeholder="Search e.g. Speed Fit"
-                          className="flex-1 px-3 py-1.5 border border-slate-250 bg-slate-50 rounded-lg text-xs font-mono outline-none"
-                        />
-                        <button
-                          onClick={handleFetchDriveFiles}
-                          disabled={driveSyncing}
-                          className="px-3 py-1.5 bg-neutral-900 hover:bg-neutral-850 text-white text-[9px] uppercase font-bold font-mono rounded-lg transition-all"
-                        >
-                          Find
-                        </button>
-                      </div>
-
-                      <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                        {driveSyncing && (
-                          <div className="py-4 text-center text-[10px] font-mono text-neutral-400 animate-pulse uppercase">
-                            Accessing drive directory...
-                          </div>
-                        )}
-                        {!driveSyncing && driveFiles.length === 0 && (
-                          <div className="py-4 text-center text-[10px] font-mono text-neutral-400 uppercase">
-                            No matching files detected.
-                          </div>
-                        )}
-                        {!driveSyncing && driveFiles.map((file) => (
-                          <div
-                            key={file.id}
-                            className="p-3 border border-[#E2E8F0] rounded-xl text-left bg-slate-50/50 hover:bg-slate-50 flex items-center justify-between gap-3"
-                          >
-                            <div className="min-w-0 flex-1 space-y-1">
-                              <h4 className="font-bold text-[10px] text-slate-800 uppercase tracking-tight truncate flex items-center gap-1.5">
-                                {file.iconLink && <img src={file.iconLink} alt="" className="w-3.5 h-3.5 shrink-0" referrerPolicy="no-referrer" />}
-                                {file.name}
-                              </h4>
-                              <p className="text-[9px] font-mono text-neutral-400">
-                                Size: {file.size ? `${(parseInt(file.size) / 1024).toFixed(1)} KB` : 'Folder/Doc'} • {file.createdTime ? new Date(file.createdTime).toLocaleDateString() : ''}
-                              </p>
-                            </div>
-                            
-                            {file.webViewLink && (
-                              <a
-                                href={file.webViewLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-[9px] font-mono font-bold rounded uppercase tracking-wide shrink-0"
-                              >
-                                View ↗
-                              </a>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                              </div>
                 )}
               </div>
 

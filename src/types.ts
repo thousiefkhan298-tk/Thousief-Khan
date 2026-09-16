@@ -55,9 +55,15 @@ export interface User {
   photoURL?: string;
   password?: string;
   assignedPassword?: string;
+  passwordHash?: string;
   clientDetails?: ClientDetails;
   healthAssessment?: HealthAssessment;
   trainerId?: string;
+  isMigrated?: boolean;
+  migratedTo?: string;
+  claimedFromId?: string;
+  uid?: string;
+  linkPending?: boolean;
 }
 
 export interface ClientDetails {
