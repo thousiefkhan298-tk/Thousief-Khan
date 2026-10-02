@@ -150,26 +150,29 @@ export const ClientRoster: React.FC = () => {
   // Perform multi-criteria Client-Side Filtering
   const filteredClients = clients.filter((c) => {
     // Search query matches name or email (case-insensitive)
+    const q = (searchQuery || "").toLowerCase().trim();
     const matchesSearch =
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.email.toLowerCase().includes(searchQuery.toLowerCase());
+      !q ||
+      (c.name || "").toLowerCase().includes(q) ||
+      (c.email || "").toLowerCase().includes(q);
 
     // Plan Filter
     const matchesPlan =
       selectedPlanFilter === "All" ||
-      c.plan.toLowerCase() === selectedPlanFilter.toLowerCase();
+      (c.plan || "").toLowerCase() === (selectedPlanFilter || "").toLowerCase();
 
     // Status Filter
     const matchesStatus =
       selectedStatusFilter === "All" ||
-      c.status.toLowerCase() === selectedStatusFilter.toLowerCase();
+      (c.status || "").toLowerCase() === (selectedStatusFilter || "").toLowerCase();
 
     return matchesSearch && matchesPlan && matchesStatus;
   });
 
   // Initials generator helper
   const getInitials = (name: string) => {
-    const parts = name.trim().split(" ");
+    const parts = (name || "").trim().split(" ");
+    if (!parts[0]) return "SF";
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
   };
@@ -376,7 +379,7 @@ export const ClientRoster: React.FC = () => {
         /* Real clients grid */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredClients.map((client) => {
-            const planLower = client.plan.toLowerCase();
+            const planLower = (client.plan || "").toLowerCase();
             const isElite = planLower === "elite";
             const isAccelerate = planLower === "accelerate";
 

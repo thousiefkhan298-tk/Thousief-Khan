@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
-import admin from "firebase-admin";
+import { initializeApp, getApps, getApp, App } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { initMcpServer } from "./src/mcpServer.js";
 
@@ -22,18 +22,24 @@ if (!FIRESTORE_DATABASE_ID) {
 }
 
 // Initialize Firebase Admin securely
+let firebaseAdminApp: App | undefined;
 try {
-  if (FIREBASE_PROJECT_ID) {
-    admin.initializeApp({
-      projectId: FIREBASE_PROJECT_ID,
-    });
-    console.log("Firebase Admin initialized for project " + FIREBASE_PROJECT_ID + " (database: " + (FIRESTORE_DATABASE_ID || "(default)") + ").");
+  if (getApps().length === 0) {
+    if (FIREBASE_PROJECT_ID) {
+      firebaseAdminApp = initializeApp({
+        projectId: FIREBASE_PROJECT_ID,
+      });
+      console.log("Firebase Admin initialized for project " + FIREBASE_PROJECT_ID + " (database: " + (FIRESTORE_DATABASE_ID || "(default)") + ").");
+    } else {
+      firebaseAdminApp = initializeApp();
+      console.log("Firebase Admin initialized with default configuration.");
+    }
   } else {
-    admin.initializeApp();
-    console.log("Firebase Admin initialized with default configuration.");
+    firebaseAdminApp = getApp();
   }
 } catch (e: any) {
   console.warn("Firebase Admin already initialized or could not be initialized:", e.message);
+  firebaseAdminApp = getApps()[0];
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -67,7 +73,7 @@ async function startServer() {
   // Secure database check endpoint using firebase-admin to satisfy requirements
   app.get("/api/admin/db-check", async (req, res) => {
     try {
-      const dbAdmin = getFirestore(admin.app(), FIRESTORE_DATABASE_ID);
+      const dbAdmin = getFirestore(firebaseAdminApp, FIRESTORE_DATABASE_ID);
       const usersSnap = await dbAdmin.collection("users").limit(1).get();
       res.json({
         success: true,
@@ -86,6 +92,17 @@ async function startServer() {
 
   // Initialize Model Context Protocol (MCP) server endpoints
   initMcpServer(app);
+
+  // Legacy routes must not create sessions or reset passwords from profile fields.
+  // Sign-in and password recovery go through Firebase Authentication directly.
+  for (const route of ["/api/auth/verify-and-sync-user", "/api/auth/legacy-login"]) {
+    app.post(route, (_req, res) => {
+      res.status(410).json({
+        success: false,
+        error: "Use Firebase email/password or Google sign-in. Recover forgotten passwords from the login page.",
+      });
+    });
+  }
 
   // SPEED FIT TRANSFORMATION ENGINE GENERATION ROUTE
   app.post("/api/transformation/generate", async (req, res) => {

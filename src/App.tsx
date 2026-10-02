@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
-import { auth, db, testFirebaseConnection } from './firebase.js';
+import { onAuthStateChanged, sendEmailVerification, signOut } from 'firebase/auth';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { auth, db } from './firebase.js';
 import LoginPage from './pages/Auth/LoginPage.js';
 import SignupPage from './pages/Auth/SignupPage.js';
 import Dashboard from './pages/Dashboard.js';
@@ -22,22 +22,16 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 import { notificationService } from './services/notificationService';
 import { firebaseService } from './services/firebaseService';
-import { ADMIN_EMAIL, TRAINER_EMAILS } from './constants';
-
-// Role is decided by the signed-in email address only. It is never chosen by the
-// user and never trusted from a stale Firestore field, so no other account can
-// gain trainer access.
-const TRAINER_EMAIL_SET = TRAINER_EMAILS.map((e) => e.trim().toLowerCase());
-
-const resolveRole = (email?: string | null): 'TRAINER' | 'CLIENT' => {
-  const e = (email || '').trim().toLowerCase();
-  if (e === ADMIN_EMAIL.trim().toLowerCase()) return 'TRAINER';
-  return TRAINER_EMAIL_SET.includes(e) ? 'TRAINER' : 'CLIENT';
-};
+import { requiresOnboarding, resolveRole } from './services/profileIdentity';
+import { claimPlaceholderAccount } from './services/accountLinking';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [profileError, setProfileError] = useState('');
+  const [profileAttempt, setProfileAttempt] = useState(0);
+  const [recoveryNotice, setRecoveryNotice] = useState('');
+  const [recovering, setRecovering] = useState(false);
   const [notifiedSessions, setNotifiedSessions] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -66,75 +60,72 @@ const App: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
-    // Programmatic cleanup of Dev Storage / Service Worker / Browser Caches to prevent stale rendering
-    const clearDevStorageAndServiceWorker = async () => {
-      const swCleaned = localStorage.getItem('dev_sw_cleaned_v9');
-      if (!swCleaned) {
-        try {
-          // 1. Unregister all active Service Workers
-          if ('serviceWorker' in navigator) {
-            const registrations = await navigator.serviceWorker.getRegistrations();
-            for (const registration of registrations) {
-              await registration.unregister();
-              console.log('Service Worker unregistered successfully during cleanup');
-            }
-          }
-          
-          // 2. Clear Cache Storage
-          if ('caches' in window) {
-            const cacheNames = await caches.keys();
-            for (const name of cacheNames) {
-              await caches.delete(name);
-              console.log('Cache storage cleared:', name);
-            }
-          }
-
-          localStorage.setItem('dev_sw_cleaned_v9', 'true');
-          console.log('Dev storage successfully cleaned! Performing hot reload...');
-          window.location.reload();
-        } catch (error) {
-          console.error('Error cleaning dev storage:', error);
-        }
-      }
-    };
-
-    clearDevStorageAndServiceWorker();
-    testFirebaseConnection();
-    
+    let active = true;
     let userUnsubscribe: (() => void) | null = null;
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      console.log("Auth state changed, user:", firebaseUser ? firebaseUser.uid : "null");
-      if (userUnsubscribe) {
-        userUnsubscribe();
-        userUnsubscribe = null;
+    let profileTimer: ReturnType<typeof setTimeout>;
+    const clearTimer = () => clearTimeout(profileTimer);
+    const failProfile = (message: string) => {
+      if (!active) return;
+      clearTimer();
+      setUser(null);
+      setProfileError(message);
+      setLoading(false);
+    };
+    const waitForProfile = () => {
+      clearTimer();
+      profileTimer = setTimeout(() => failProfile(
+        'Your sign-in or profile could not finish loading. Check your connection and retry. If this continues, ask your trainer to check your account and database access.'
+      ), 15000);
+    };
+    waitForProfile();
+
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      userUnsubscribe?.();
+      userUnsubscribe = null;
+      clearTimer();
+      setUser(null);
+      setProfileError('');
+
+      if (!firebaseUser) {
+        setLoading(false);
+        return;
       }
 
-      if (firebaseUser) {
-        const role = resolveRole(firebaseUser.email);
-        userUnsubscribe = onSnapshot(doc(db, 'users', firebaseUser.uid), (docSnap) => {
-          console.log("User doc updated in real-time, exists:", docSnap.exists(), "role:", role);
-          if (docSnap.exists()) {
-            setUser({ ...firebaseUser, ...docSnap.data(), role });
-          } else {
-            setUser({ ...firebaseUser, role });
-          }
-          setLoading(false);
-        }, (error) => {
-          console.error("Error listening to user doc:", error);
-          setUser({ ...firebaseUser, role });
-          setLoading(false);
+      waitForProfile();
+      userUnsubscribe = onSnapshot(doc(db, 'users', firebaseUser.uid), (docSnap) => {
+        if (!active || auth.currentUser?.uid !== firebaseUser.uid) return;
+        if (!docSnap.exists()) {
+          // Login/signup may still be linking the account. Never render a
+          // dashboard with a missing profile or a guessed client identity.
+          setUser(null);
+          setLoading(true);
+          waitForProfile();
+          return;
+        }
+        clearTimer();
+        setProfileError('');
+        setUser({
+          ...firebaseUser,
+          ...docSnap.data(),
+          uid: firebaseUser.uid,
+          id: firebaseUser.uid,
+          email: firebaseUser.email,
+          role: resolveRole(firebaseUser.email),
         });
-      } else {
-        setUser(null);
         setLoading(false);
-      }
-    });
+      }, (error) => {
+        console.error('Unable to load Speed Fit profile:', error.code);
+        failProfile('Signed in, but your Speed Fit profile could not be read. Ask the app owner to check the database connection and access rules.');
+      });
+    }, () => failProfile('Sign-in could not be initialized. Check your connection and retry.'));
 
     return () => {
+      active = false;
+      clearTimer();
       unsubscribe();
-      if (userUnsubscribe) userUnsubscribe();
+      userUnsubscribe?.();
     };
-  }, []);
+  }, [profileAttempt]);
 
   useEffect(() => {
     if (!user?.uid || user.role !== 'CLIENT') return;
@@ -183,11 +174,59 @@ const App: React.FC = () => {
     return () => unsubscribeSessions();
   }, [user?.uid, notifiedSessions]);
 
+  const retryProfile = async () => {
+    setRecovering(true);
+    setRecoveryNotice('');
+    try {
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        await currentUser.reload();
+        await currentUser.getIdToken(true);
+        if (currentUser.email) await claimPlaceholderAccount(currentUser.uid, currentUser.email);
+      }
+      setProfileError('');
+      setLoading(true);
+      setProfileAttempt(value => value + 1);
+    } catch (error: any) {
+      setRecoveryNotice(error.message || 'Your profile is still unavailable. Please contact your trainer.');
+    } finally {
+      setRecovering(false);
+    }
+  };
+
+  const verifyEmail = async () => {
+    if (!auth.currentUser) return;
+    setRecovering(true);
+    try {
+      await sendEmailVerification(auth.currentUser);
+      setRecoveryNotice('Check your inbox, follow the verification link, then choose Retry.');
+    } catch {
+      setRecoveryNotice('The verification email could not be sent. Please try again later.');
+    } finally {
+      setRecovering(false);
+    }
+  };
+
+  if (profileError) {
+    return (
+      <div className="min-h-screen flex flex-col gap-6 items-center justify-center bg-brand-dark text-white p-8">
+        <h1 className="text-2xl">Unable to open your dashboard</h1>
+        <p role="alert" className="max-w-lg text-center">{profileError}</p>
+        {recoveryNotice && <p role="status" className="max-w-lg text-center">{recoveryNotice}</p>}
+        {auth.currentUser && !auth.currentUser.emailVerified && (
+          <button disabled={recovering} onClick={verifyEmail}>Send verification email</button>
+        )}
+        <button className="btn-primary" disabled={recovering} onClick={retryProfile}>{recovering ? 'Please wait...' : 'Retry'}</button>
+        <button disabled={recovering} onClick={() => signOut(auth).catch(() => setProfileError('Could not sign out. Please check your connection.'))}>Sign out</button>
+      </div>
+    );
+  }
+
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center bg-brand-dark text-white font-mono text-xs uppercase tracking-widest">Initializing Systems...</div>;
   }
 
-  const requireOnboarding = user && user.role === 'CLIENT' && !user.onboardingCompleted;
+  const requireOnboarding = user && requiresOnboarding(user);
 
   return (
     <ErrorBoundary>

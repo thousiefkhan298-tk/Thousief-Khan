@@ -1,33 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { auth, db, handleFirestoreError, OperationType } from '../../firebase.js';
-import { doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { GoogleAuthProvider, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, sendEmailVerification, signOut } from 'firebase/auth';
+import { auth } from '../../firebase';
 import { claimPlaceholderAccount } from '../../services/accountLinking';
-import { ArrowRight, Zap, ShieldAlert, Sparkles, Check } from 'lucide-react';
-import QRCodeDisplay from '../../components/QRCodeDisplay';
+import { ArrowRight, Zap, ShieldAlert, Check, RefreshCw } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [notice, setNotice] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [invalidCredState, setInvalidCredState] = useState(false);
+  
+  const [verificationRequired, setVerificationRequired] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyNotice, setVerifyNotice] = useState('');
+  
   const navigate = useNavigate();
 
-  // Load remembered credentials if present
+  // Remember email only; passwords are never saved in local storage.
   useEffect(() => {
     const savedEmail = localStorage.getItem('speedfit_remembered_email');
-    const savedPassword = localStorage.getItem('speedfit_remembered_password');
-    if (savedEmail && savedPassword) {
+    // Previous builds stored passwords here. Remove them during the upgrade.
+    localStorage.removeItem('speedfit_remembered_password');
+    if (savedEmail) {
       setEmail(savedEmail);
-      setPassword(savedPassword);
       setRememberMe(true);
     }
   }, []);
 
   const handleGoogleLogin = async () => {
     setError('');
+    setNotice('');
+    setInvalidCredState(false);
     setLoading(true);
     const provider = new GoogleAuthProvider();
     try {
@@ -36,22 +43,24 @@ const LoginPage: React.FC = () => {
       const googleEmail = googleUser.email?.toLowerCase().trim();
 
       if (googleEmail) {
-        const isTrainer = ['thousiefkhan298@gmail.com', 'speedfit029@gmail.com', 'thousiefk@gmail.com'].includes(googleEmail.toLowerCase());
-        const role = isTrainer ? 'TRAINER' : 'CLIENT';
         await claimPlaceholderAccount(googleUser.uid, googleEmail, {
           name: googleUser.displayName || googleEmail.split('@')[0],
           googleLinked: true,
-          role,
         });
       }
 
       navigate('/dashboard');
     } catch (err: any) {
-      console.error("Google Auth Error:", err);
+      if (['auth/popup-closed-by-user', 'auth/cancelled-popup-request'].includes(err.code)) {
+        return;
+      }
+      console.warn("Google Auth Warning:", err.code || err.message);
       if (err.code === 'auth/popup-blocked') {
         setError('Google login popup was blocked. Please enable popups for this site or use standard email login.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError('Google sign-in is not configured for this address. Ask the app owner to add this site to Firebase Authentication authorized domains.');
       } else {
-        setError('Google login failed: ' + err.message);
+        setError('Google login failed: ' + (err.message || 'Please try again.'));
       }
     } finally {
       setLoading(false);
@@ -61,100 +70,116 @@ const LoginPage: React.FC = () => {
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setNotice('');
+    setInvalidCredState(false);
     setLoading(true);
-    let autoLoggedIn = false;
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const firebaseUser = userCredential.user;
-      
-      // Safety claim attempt on standard login
-      if (firebaseUser.email) {
-        await claimPlaceholderAccount(firebaseUser.uid, firebaseUser.email);
-      }
-
-      // Save credentials if Remember Me is active
+      const result = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+      await claimPlaceholderAccount(result.user.uid, result.user.email || email);
       if (rememberMe) {
-        localStorage.setItem('speedfit_remembered_email', email);
-        localStorage.setItem('speedfit_remembered_password', password);
+        localStorage.setItem('speedfit_remembered_email', email.trim().toLowerCase());
       } else {
         localStorage.removeItem('speedfit_remembered_email');
-        localStorage.removeItem('speedfit_remembered_password');
       }
-
       navigate('/dashboard');
     } catch (err: any) {
-      console.error("Login error:", err);
-      
-      // Check if client exists in Firestore but hasn't joined Firebase Auth yet
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
-        try {
-          console.log("Checking if athlete exists in Firestore but has not joined Firebase Auth yet...");
-          const usersRef = collection(db, 'users');
-          const q = query(usersRef, where('email', '==', email.toLowerCase().trim()));
-          const querySnap = await getDocs(q);
-          
-          if (!querySnap.empty) {
-            const userDocSnap = querySnap.docs[0];
-            const userData = userDocSnap.data();
-            
-            // Hash entered password to compare with secure hashed passwords
-            const msgBuffer = new TextEncoder().encode(password.trim());
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const enteredHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      const code = err?.code || '';
+      const msg = err?.message || '';
+      const isVerificationIssue = msg.includes('Verify your email');
+      const isInvalidCred = ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email'].includes(code) ||
+                            msg.includes('auth/invalid-credential') ||
+                            msg.includes('auth/wrong-password') ||
+                            msg.includes('auth/user-not-found') ||
+                            msg.includes('auth/invalid-email');
 
-            const storedPassword = userData.password || userData.assignedPassword;
-            const storedHash = userData.passwordHash;
-            
-            const isMatch = (storedHash && storedHash === enteredHash) ||
-                            (storedPassword && String(storedPassword).trim() === password.trim());
+      console.warn("Login attempt not completed:", code || msg);
 
-            if (isMatch) {
-              console.log("Match found in database! Creating Firebase Auth credential for client...");
-              const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-              const uid = userCredential.user.uid;
-              
-              // Claim the placeholder account via accountLinking service
-              await claimPlaceholderAccount(uid, email, {
-                onboardingCompleted: userData.onboardingCompleted !== undefined ? userData.onboardingCompleted : false
-              });
-              
-              console.log("Client registration auto-completed! Logging in...");
-              autoLoggedIn = true;
-
-              // Save credentials if Remember Me is active
-              if (rememberMe) {
-                localStorage.setItem('speedfit_remembered_email', email);
-                localStorage.setItem('speedfit_remembered_password', password);
-              } else {
-                localStorage.removeItem('speedfit_remembered_email');
-                localStorage.removeItem('speedfit_remembered_password');
-              }
-
-              navigate('/dashboard');
-              return;
-            }
-          }
-        } catch (fallbackErr) {
-          console.error("Auto registration fallback failed:", fallbackErr);
-        }
-      }
-
-      if (!autoLoggedIn) {
-        if (err.code === 'auth/operation-not-allowed') {
-          setError('Email/Password login is not enabled. Please enable it in the Firebase Console under Authentication > Sign-in method.');
-        } else if (err.code === 'auth/unauthorized-domain') {
-          setError('This domain is not authorized for Firebase Authentication. Please add this domain to the "Authorized domains" list in the Firebase Console (Authentication > Settings).');
-        } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-          setError('Invalid credentials.');
-        } else {
-          setError(err.message || 'Failed to login');
-        }
+      if (isVerificationIssue) {
+        setVerificationRequired(true);
+        setError('');
+      } else if (isInvalidCred) {
+        setInvalidCredState(true);
+        setError('Email or password was not accepted. If you haven’t created a password account yet, sign up or use Google sign-in.');
+      } else if (code === 'auth/operation-not-allowed') {
+        setError('Email/password sign-in is not enabled for this app. Please use Google sign-in.');
+      } else {
+        setError(msg || 'Unable to sign in. Please try again.');
       }
     } finally {
-      if (!autoLoggedIn) {
-        setLoading(false);
+      setLoading(false);
+    }
+  };
+
+  const handleSendVerification = async () => {
+    if (!auth.currentUser) return;
+    setVerifying(true);
+    setVerifyNotice('');
+    setError('');
+    try {
+      await sendEmailVerification(auth.currentUser);
+      setVerifyNotice('Verification email sent! Check your inbox, follow the link, then choose Check Verification.');
+    } catch (err: any) {
+      setError('Could not send verification email: ' + err.message);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleCheckVerification = async () => {
+    if (!auth.currentUser) return;
+    setVerifying(true);
+    setVerifyNotice('');
+    setError('');
+    try {
+      await auth.currentUser.reload();
+      if (auth.currentUser.emailVerified) {
+        await claimPlaceholderAccount(auth.currentUser.uid, auth.currentUser.email || email);
+        navigate('/dashboard');
+      } else {
+        setError('Email is still not verified. Please check your inbox and click the link.');
       }
+    } catch (err: any) {
+      setError(err.message || 'Verification check failed.');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleCancelVerification = async () => {
+    setVerifying(true);
+    try {
+      await signOut(auth);
+      setVerificationRequired(false);
+      setError('');
+      setVerifyNotice('');
+    } catch (err: any) {
+      setError('Error signing out: ' + err.message);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    setError('');
+    setNotice('');
+    if (!email.trim()) {
+      setError('Enter your email address first, then choose Forgot password.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+      setNotice(`If ${email.trim().toLowerCase()} has an account, a reset link was sent to your inbox.`);
+      setInvalidCredState(false);
+    } catch (err: any) {
+      if (err.code === 'auth/user-not-found') {
+        setNotice(`If ${email.trim().toLowerCase()} has an account, a reset link was sent to your inbox.`);
+        setInvalidCredState(false);
+      } else {
+        setError('Unable to request a reset link. Check the email address and try again.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -186,92 +211,187 @@ const LoginPage: React.FC = () => {
           </div>
 
           {error && (
-            <div className="bg-red-950/30 border border-red-900/50 text-red-500 p-4 rounded-2xl mb-8 text-xs font-mono flex items-start gap-2.5">
-              <ShieldAlert className="w-5 h-5 shrink-0" />
-              <span>{error}</span>
+            <div role="alert" className="bg-red-950/30 border border-red-900/50 text-red-400 p-4 rounded-2xl mb-6 text-xs font-mono space-y-3">
+              <div className="flex items-start gap-2.5">
+                <ShieldAlert className="w-5 h-5 shrink-0 text-red-500 mt-0.5" />
+                <div className="flex-1">
+                  <span className="font-semibold text-white">{error}</span>
+                </div>
+              </div>
+              {invalidCredState && (
+                <div className="pt-2 border-t border-red-900/40 text-[11px] space-y-2.5">
+                  <p className="text-[#A1A1AA] text-[10px] uppercase font-bold tracking-wider">Quick Recovery Options:</p>
+                  <div className="flex flex-col gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleGoogleLogin}
+                      disabled={loading}
+                      className="w-full py-2.5 px-3 bg-white text-neutral-900 font-bold rounded-xl hover:bg-neutral-200 transition-all text-[10px] font-mono uppercase tracking-wider text-center flex items-center justify-center gap-2"
+                    >
+                      Sign in with Google
+                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handlePasswordReset}
+                        disabled={loading || !email.trim()}
+                        className="flex-1 py-2 px-2.5 bg-[#1a1a1e] border border-[#333] hover:border-brand-red text-white rounded-xl transition-all text-[9px] font-mono uppercase tracking-wider text-center disabled:opacity-40"
+                      >
+                        Reset Password
+                      </button>
+                      <Link
+                        to={`/signup?email=${encodeURIComponent(email.trim())}`}
+                        className="flex-1 py-2 px-2.5 bg-[#1a1a1e] border border-[#333] hover:border-brand-red text-white rounded-xl transition-all text-[9px] font-mono uppercase tracking-wider text-center"
+                      >
+                        Create Account
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          <div className="mb-6">
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              className="w-full py-4 bg-white text-neutral-900 font-bold rounded-2xl hover:bg-neutral-200 transition-all text-[10px] font-mono uppercase tracking-[0.15em] flex items-center justify-center gap-2 no-theme-override"
-            >
-              Sign in with Google
-            </button>
-          </div>
-
-          <div className="relative flex py-4 items-center mb-6">
-            <div className="flex-grow border-t border-[#2A2A2A]"></div>
-            <span className="flex-shrink-0 mx-4 text-white font-bold text-[9px] font-mono uppercase tracking-widest">Or Email</span>
-            <div className="flex-grow border-t border-[#2A2A2A]"></div>
-          </div>
-
-          <form onSubmit={handleEmailLogin} className="space-y-6 mb-6">
-            <div className="relative">
-              <label className="block text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA] font-bold mb-3 ml-1">Identity (Email)</label>
-              <input
-                type="email"
-                required
-                className="input-field"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="athlete@speedfit.com"
-              />
+          {notice && (
+            <div role="status" className="bg-emerald-950/30 border border-emerald-900/50 text-emerald-400 p-4 rounded-2xl mb-6 text-xs font-mono">
+              {notice}
             </div>
-            
-            <div className="relative">
-              <label className="block text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA] font-bold mb-3 ml-1">Secret (Password)</label>
-              <input
-                type="password"
-                required
-                className="input-field"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-              />
-            </div>
+          )}
 
-            {/* Remember Me and Forgot Password Container */}
-            <div className="flex items-center justify-between mt-4">
-              <label className="flex items-center space-x-2.5 cursor-pointer group select-none">
-                <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all duration-200 ${rememberMe ? 'bg-[#E10600] border-[#FF3B30]' : 'border-[#2A2A2A] bg-[#0d0d0f] group-hover:border-[#FF3B30]'}`}>
-                  {rememberMe && <Check className="w-3.5 h-3.5 text-white stroke-[3px]" />}
+          {verificationRequired ? (
+            <div className="space-y-6 text-left">
+              <div className="bg-[#141417] border border-[#2A2A2A] rounded-2xl p-6 mb-4">
+                <p className="text-xs text-white font-mono uppercase tracking-wider font-bold mb-3 text-brand-red">★ Action Required: Verify Email</p>
+                <p className="text-[11px] text-[#A1A1AA] leading-relaxed mb-4">
+                  We found a pre-registered client profile for <span className="text-white font-bold">{email}</span>!
+                  To link your training history, workout plans, and diet schedule securely, please verify your email address.
+                </p>
+                {verifyNotice && (
+                  <p role="status" className="text-[10px] font-mono text-green-400 uppercase tracking-wider mb-4 font-bold bg-green-950/20 border border-green-900/50 p-3 rounded-xl">
+                    {verifyNotice}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <button
+                  type="button"
+                  disabled={verifying}
+                  onClick={handleSendVerification}
+                  className="w-full py-4 bg-brand-red text-white font-bold rounded-2xl hover:bg-red-600 transition-all text-[10px] font-mono uppercase tracking-[0.15em]"
+                >
+                  {verifying ? 'Please wait...' : 'Send Verification Email'}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={verifying}
+                  onClick={handleCheckVerification}
+                  className="w-full py-4 bg-white text-neutral-900 font-bold rounded-2xl hover:bg-neutral-200 transition-all text-[10px] font-mono uppercase tracking-[0.15em]"
+                >
+                  {verifying ? 'Please wait...' : 'I have verified / Check Status'}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={verifying}
+                  onClick={handleCancelVerification}
+                  className="w-full py-4 bg-transparent border border-[#2A2A2A] text-[#A1A1AA] hover:text-white font-bold rounded-2xl transition-all text-[10px] font-mono uppercase tracking-[0.15em]"
+                >
+                  Cancel & Sign Out
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="mb-6">
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  disabled={loading}
+                  className="w-full py-4 bg-white text-neutral-900 font-bold rounded-2xl hover:bg-neutral-200 transition-all text-[10px] font-mono uppercase tracking-[0.15em] flex items-center justify-center gap-2 no-theme-override"
+                >
+                  Sign in with Google
+                </button>
+              </div>
+
+              <div className="relative flex py-4 items-center mb-6">
+                <div className="flex-grow border-t border-[#2A2A2A]"></div>
+                <span className="flex-shrink-0 mx-4 text-white font-bold text-[9px] font-mono uppercase tracking-widest">Or Email</span>
+                <div className="flex-grow border-t border-[#2A2A2A]"></div>
+              </div>
+
+              <form onSubmit={handleEmailLogin} className="space-y-6 mb-6">
+                <div className="relative">
+                  <label htmlFor="login-email" className="block text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA] font-bold mb-3 ml-1">Identity (Email)</label>
+                  <input
+                    id="login-email"
+                    autoComplete="username"
+                    type="email"
+                    required
+                    className="input-field"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (invalidCredState) setInvalidCredState(false);
+                      if (error) setError('');
+                    }}
+                    placeholder="athlete@speedfit.com"
+                  />
                 </div>
-                <input 
-                  type="checkbox" 
-                  className="hidden" 
-                  checked={rememberMe} 
-                  onChange={(e) => setRememberMe(e.target.checked)} 
-                />
-                <span className="text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA] group-hover:text-white transition-colors">Remember Me</span>
-              </label>
-              
-              <button 
-                type="button"
-                onClick={handleGoogleLogin}
-                className="text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA] hover:text-[#FF3B30] transition-colors"
-              >
-                Forgot Password?
-              </button>
-            </div>
+                
+                <div className="relative">
+                  <label htmlFor="login-password" className="block text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA] font-bold mb-3 ml-1">Secret (Password)</label>
+                  <input
+                    id="login-password"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    className="input-field"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (invalidCredState) setInvalidCredState(false);
+                      if (error) setError('');
+                    }}
+                    placeholder="Your password"
+                  />
+                </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary group w-full"
-            >
-              <span>{loading ? 'Processing...' : 'Login with Email'}</span>
-              {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
-            </button>
-          </form>
+                {/* Remember Me and Forgot Password Container */}
+                <div className="flex items-center justify-between mt-4">
+                  <label className="flex items-center space-x-2.5 cursor-pointer group select-none">
+                    <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all duration-200 ${rememberMe ? 'bg-[#E10600] border-[#FF3B30]' : 'border-[#2A2A2A] bg-[#0d0d0f] group-hover:border-[#FF3B30]'}`}>
+                      {rememberMe && <Check className="w-3.5 h-3.5 text-white stroke-[3px]" />}
+                    </div>
+                    <input 
+                      type="checkbox" 
+                      className="hidden" 
+                      checked={rememberMe} 
+                      onChange={(e) => setRememberMe(e.target.checked)} 
+                    />
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA] group-hover:text-white transition-colors">Remember Me</span>
+                  </label>
+                  
+                  <button type="button" disabled={loading} onClick={handlePasswordReset} className="text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA]">Forgot password?</button>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="btn-primary group w-full"
+                >
+                  <span>{loading ? 'Processing...' : 'Login with Email'}</span>
+                  {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
+                </button>
+              </form>
+            </>
+          )}
 
           {/* Recovery and Gmail restoration helpful tip */}
           <div className="bg-[#0d0d0f]/60 border border-[#2A2A2A] rounded-2xl p-4 text-left mb-6">
             <p className="text-[9px] font-mono uppercase tracking-wider text-[#A1A1AA] leading-relaxed">
-              <span className="text-[#FF3B30] font-bold">★ Gmail Sign-In:</span> If you forgot your password, authenticate via Google. Speed Fit auto-matches your Gmail address and instantly retrieves all client profiles, diet schedules, and workout histories securely.
+              <span className="text-[#FF3B30] font-bold">★ Gmail Sign-In:</span> Use the same email your trainer registered. If an older profile cannot be linked, ask your trainer to check the account. Password recovery is available above.
             </p>
           </div>
 
@@ -305,4 +425,3 @@ const LoginPage: React.FC = () => {
 };
 
 export default LoginPage;
-

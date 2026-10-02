@@ -1,9 +1,11 @@
-import { db } from '../firebase';
+import { auth, db } from '../firebase';
+import { buildClaimProfile } from './profileIdentity';
 import { 
   collection, 
   query, 
   where, 
   getDocs, 
+  getDoc,
   doc, 
   setDoc, 
   updateDoc, 
@@ -19,6 +21,22 @@ import {
 export async function claimPlaceholderAccount(authUid: string, email: string, overrides: any = {}) {
   try {
     const emailLower = email.trim().toLowerCase();
+    const signedInUser = auth.currentUser;
+    if (!signedInUser || signedInUser.uid !== authUid || signedInUser.email?.trim().toLowerCase() !== emailLower) {
+      throw new Error('Sign in before linking your profile.');
+    }
+    const canonicalRef = doc(db, 'users', authUid);
+    const current = await getDoc(canonicalRef);
+    
+    const hasCurrentDoc = current.exists();
+    const currentData = hasCurrentDoc ? current.data() : {};
+    
+    if (hasCurrentDoc) {
+      // Returning members keep their current data; never re-import an old copy.
+      await setDoc(canonicalRef, buildClaimProfile(authUid, emailLower, {}, currentData, overrides), { merge: true });
+      return null;
+    }
+    
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('email', '==', emailLower));
     const snap = await getDocs(q);
@@ -27,35 +45,30 @@ export async function claimPlaceholderAccount(authUid: string, email: string, ov
     let placeholderData: any = null;
 
     for (const d of snap.docs) {
-      if (d.id !== authUid && !d.data().isMigrated) {
+      if (d.id !== authUid && !d.data().isMigrated && !d.data().migratedTo) {
+        if (!signedInUser.emailVerified) {
+          throw new Error('Verify your email or use Google sign-in before linking an existing client profile.');
+        }
+        if (placeholderId) {
+          throw new Error('More than one existing profile matches this email. Please ask your trainer to review the duplicates.');
+        }
         placeholderId = d.id;
         placeholderData = d.data();
-        break;
       }
     }
 
-    const mergedData: any = {
-      uid: authUid,
-      id: authUid,
-      email: emailLower,
-      ...placeholderData,
-      ...overrides,
-    };
-
-    // Strip password and assignedPassword
-    delete mergedData.password;
-    delete mergedData.assignedPassword;
+    const mergedData = buildClaimProfile(authUid, emailLower, placeholderData || {}, {}, overrides);
 
     if (placeholderId) {
       mergedData.claimedFromId = placeholderId;
       mergedData.linkPending = true;
     }
 
-    await setDoc(doc(db, 'users', authUid), mergedData, { merge: true });
+    await setDoc(canonicalRef, mergedData, { merge: true });
     console.log(`Successfully merged placeholder profile into ${authUid}. Placeholder ID: ${placeholderId}`);
     return placeholderId;
   } catch (err) {
-    console.warn("Error claiming placeholder account:", err);
+    console.warn("Error claiming placeholder account:", err instanceof Error ? err.message : 'Unknown error');
     throw err;
   }
 }
@@ -207,7 +220,7 @@ export async function reconcileClientAccounts(clients: any[], trainerId: string)
       if (!cId) continue;
 
       // 1. Stamp active trainerId onto unassigned or legacy clients
-      if (!client.trainerId || client.trainerId !== trainerId) {
+      if (!client.trainerId) {
         console.log(`Stamping active trainerId ${trainerId} on client ${cId}`);
         await updateDoc(doc(db, 'users', cId), { trainerId });
       }

@@ -251,13 +251,23 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
     return allDrafts.find(d => d.id === reviewingDraft.id) || reviewingDraft;
   }, [reviewingDraft, allDrafts]);
 
-  const activeClients = useMemo(() => clients.filter(c => c.isActive !== false && 
-    (searchQuery === '' || (c.name && c.name.toLowerCase().includes(searchQuery.toLowerCase())) || (c.email && c.email.toLowerCase().includes(searchQuery.toLowerCase())))
-  ), [clients, searchQuery]);
+  const activeClients = useMemo(() => {
+    const q = (searchQuery || '').toLowerCase().trim();
+    return clients.filter(c => c.isActive !== false && 
+      (q === '' || 
+        ((c.name || '').toLowerCase().includes(q)) || 
+        ((c.email || '').toLowerCase().includes(q)))
+    );
+  }, [clients, searchQuery]);
 
-  const inactiveClients = useMemo(() => clients.filter(c => c.isActive === false &&                
-    (searchQuery === '' || (c.name && c.name.toLowerCase().includes(searchQuery.toLowerCase())) || (c.email && c.email.toLowerCase().includes(searchQuery.toLowerCase())))
-  ), [clients, searchQuery]);
+  const inactiveClients = useMemo(() => {
+    const q = (searchQuery || '').toLowerCase().trim();
+    return clients.filter(c => c.isActive === false &&                
+      (q === '' || 
+        ((c.name || '').toLowerCase().includes(q)) || 
+        ((c.email || '').toLowerCase().includes(q)))
+    );
+  }, [clients, searchQuery]);
 
   const clientStats = useMemo(() => {
     const stats: Record<string, { present: number, total: number, percentage: number, leave: number }> = {};
@@ -449,7 +459,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
     try {
       await firebaseService.createClient({
         name: newClientData.name,
-        email: newClientData.email.toLowerCase().trim(),
+        email: (newClientData.email || '').toLowerCase().trim(),
         password: assignedPassword,
         trainerId: userData.uid
       });
@@ -957,7 +967,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                             <span className={`text-[9px] font-mono px-2.5 py-1 rounded font-bold ${
                               recordObj.status === 'Present' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
                             }`}>
-                              {recordObj.status.toUpperCase()}
+                              {(recordObj.status || '').toUpperCase()}
                             </span>
                           )}
                         </div>
@@ -1381,7 +1391,11 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                 <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
                   {clients
                     .filter(c => c.isActive !== false)
-                    .filter(c => attendanceFilterQuery === '' || c.name.toLowerCase().includes(attendanceFilterQuery.toLowerCase()))
+                    .filter(c => {
+                      const q = (attendanceFilterQuery || '').toLowerCase().trim();
+                      if (!q) return true;
+                      return (c.name || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q);
+                    })
                     .map((client) => {
                       const dayRecord = attendanceRecords.find(a => a.clientId === client.id && a.date === focusedDate);
                       const isPresent = dayRecord?.status === 'Present';
@@ -1394,7 +1408,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                             <div className="text-[9px] font-mono text-[#64748B] truncate mt-0.5">
                               {dayRecord ? (
                                 <span className={isPresent ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
-                                  ● {dayRecord.status.toUpperCase()}
+                                  ● {(dayRecord.status || '').toUpperCase()}
                                 </span>
                               ) : (
                                 <span className="text-[#A1A1AA] font-bold">○ UNMARKED</span>
@@ -1502,7 +1516,9 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                 .filter((record) => {
                   const athlete = clients.find(c => c.id === record.clientId);
                   if (!athlete) return false;
-                  return attendanceHistoryQuery === '' || athlete.name.toLowerCase().includes(attendanceHistoryQuery.toLowerCase());
+                  const q = (attendanceHistoryQuery || '').toLowerCase().trim();
+                  if (!q) return true;
+                  return (athlete.name || '').toLowerCase().includes(q) || (athlete.email || '').toLowerCase().includes(q);
                 })
                 .sort((a, b) => new Date(b.date + 'T00:00:00').getTime() - new Date(a.date + 'T00:00:00').getTime() || new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
                 .slice(0, 20)
@@ -1525,7 +1541,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                         <span className={`text-[9px] font-mono px-2.5 py-1 rounded font-bold ${
                           record.status === 'Present' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200'
                         }`}>
-                          {record.status.toUpperCase()}
+                          {(record.status || '').toUpperCase()}
                         </span>
                         <button
                           onClick={() => handleDeleteAttendanceRecord(record.id)}
@@ -2728,8 +2744,9 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
               <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
                 {clients.filter(client => {
-                  const query = attendanceFilterQuery.toLowerCase();
-                  return client.name.toLowerCase().includes(query) || client.email.toLowerCase().includes(query);
+                  const query = (attendanceFilterQuery || '').toLowerCase().trim();
+                  if (!query) return true;
+                  return (client.name || '').toLowerCase().includes(query) || (client.email || '').toLowerCase().includes(query);
                 }).map((client) => {
                   const logRecord = attendanceRecords.find(a => a.clientId === client.id && a.date === focusedDate);
                   const isPresent = logRecord?.status === 'Present';
@@ -2778,7 +2795,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                               ? 'bg-rose-100 text-rose-800 border border-rose-300' 
                               : 'bg-slate-150 text-[#A1A1AA] border border-slate-350'
                         }`}>
-                          {logRecord ? logRecord.status.toUpperCase() : 'NOT LOGGED'}
+                          {logRecord ? (logRecord.status || '').toUpperCase() : 'NOT LOGGED'}
                         </span>
 
                         <div className="flex items-center border border-[#262630] bg-[#141417] rounded-lg p-0.5 overflow-hidden">
@@ -3025,8 +3042,9 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
               <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
                 {clients.filter(client => {
-                  const q = searchQuery.toLowerCase();
-                  return client.name.toLowerCase().includes(q) || client.email.toLowerCase().includes(q);
+                  const q = (searchQuery || '').toLowerCase().trim();
+                  if (!q) return true;
+                  return (client.name || '').toLowerCase().includes(q) || (client.email || '').toLowerCase().includes(q);
                 }).map((client) => {
                   const clientPayments = paymentRecords.filter(p => p.clientId === client.id);
                   const totalPaid = clientPayments.reduce((sum, p) => sum + getPaidAmountForRecord(p), 0);
