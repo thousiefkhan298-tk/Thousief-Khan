@@ -22,16 +22,40 @@ export async function claimPlaceholderAccount(authUid: string, email: string, ov
   try {
     const emailLower = email.trim().toLowerCase();
     const signedInUser = auth.currentUser;
-    if (!signedInUser || signedInUser.uid !== authUid || signedInUser.email?.trim().toLowerCase() !== emailLower) {
+    if (!signedInUser || signedInUser.uid !== authUid || (signedInUser.email && signedInUser.email.trim().toLowerCase() !== emailLower)) {
       throw new Error('Sign in before linking your profile.');
     }
+
+    // 1. Attempt server-side admin claim (avoids client-side rule query restrictions)
+    try {
+      const idToken = await signedInUser.getIdToken();
+      const resp = await fetch('/api/auth/claim-account', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({ authUid, email: emailLower, overrides })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.success) {
+          console.log(`Server-side account link succeeded for ${authUid}. Placeholder: ${data.placeholderId}`);
+          return data.placeholderId || null;
+        }
+      }
+    } catch (apiErr) {
+      // In offline / isolated unit test environments, fall through to client logic below
+    }
+
+    // 2. Client-side canonical document check & fallback
     const canonicalRef = doc(db, 'users', authUid);
     const current = await getDoc(canonicalRef);
     
     const hasCurrentDoc = current.exists();
     const currentData = hasCurrentDoc ? current.data() : {};
     
-    if (hasCurrentDoc) {
+    if (hasCurrentDoc && !currentData.linkPending && !currentData.claimedFromId) {
       // Returning members keep their current data; never re-import an old copy.
       await setDoc(canonicalRef, buildClaimProfile(authUid, emailLower, {}, currentData, overrides), { merge: true });
       return null;
@@ -57,7 +81,7 @@ export async function claimPlaceholderAccount(authUid: string, email: string, ov
       }
     }
 
-    const mergedData = buildClaimProfile(authUid, emailLower, placeholderData || {}, {}, overrides);
+    const mergedData = buildClaimProfile(authUid, emailLower, placeholderData || {}, currentData, overrides);
 
     if (placeholderId) {
       mergedData.claimedFromId = placeholderId;
@@ -219,11 +243,9 @@ export async function reconcileClientAccounts(clients: any[], trainerId: string)
       const cId = client.uid || client.id;
       if (!cId) continue;
 
-      // 1. Stamp active trainerId onto unassigned or legacy clients
-      if (!client.trainerId) {
-        console.log(`Stamping active trainerId ${trainerId} on client ${cId}`);
-        await updateDoc(doc(db, 'users', cId), { trainerId });
-      }
+      // 1. Maintain assigned trainer: never attach unassigned clients to an arbitrary trainer
+      // Existing assigned clients preserve their trainerId; unassigned clients remain unassigned
+      // until explicitly invited or claimed.
 
       // 2. Retrospective Plaintext Password Hashing & Cleaning (Secures legacy invitation docs)
       const plainPassword = client.password || client.assignedPassword;

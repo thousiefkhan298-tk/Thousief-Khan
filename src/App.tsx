@@ -17,6 +17,7 @@ import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import Billing from './pages/Billing/index.js';
 import Subscription from './pages/Subscription/index.js';
+import PublicAssessmentPage from './pages/Assessment/PublicAssessmentPage';
 
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -95,8 +96,12 @@ const App: React.FC = () => {
       userUnsubscribe = onSnapshot(doc(db, 'users', firebaseUser.uid), (docSnap) => {
         if (!active || auth.currentUser?.uid !== firebaseUser.uid) return;
         if (!docSnap.exists()) {
-          // Login/signup may still be linking the account. Never render a
-          // dashboard with a missing profile or a guessed client identity.
+          // Login/signup may still be linking the account. Auto-trigger claim to ensure canonical doc is initialized.
+          if (firebaseUser.email) {
+            claimPlaceholderAccount(firebaseUser.uid, firebaseUser.email).catch((e: any) => {
+              console.warn("Auto-claim on snapshot missing:", e?.message);
+            });
+          }
           setUser(null);
           setLoading(true);
           waitForProfile();
@@ -233,6 +238,7 @@ const App: React.FC = () => {
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/" element={user ? (requireOnboarding ? <Navigate to="/onboarding" /> : <Navigate to="/dashboard" />) : <Navigate to="/login" />} />
+          <Route path="/assessment" element={<PublicAssessmentPage />} />
           <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage />} />
           <Route path="/signup" element={user ? <Navigate to="/" /> : <SignupPage />} />
           <Route path="/onboarding" element={user ? (requireOnboarding ? <OnboardingFlow user={user} userData={user} /> : <Navigate to="/dashboard" />) : <Navigate to="/login" />} />

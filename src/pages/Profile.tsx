@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { firebaseService } from '../services/firebaseService';
-import { User, Phone, Mail, Award, Briefcase, FileText, Camera, Check, ShieldCheck, Sparkles } from 'lucide-react';
+import { User, Phone, Mail, Award, Briefcase, FileText, Camera, Check, ShieldCheck, Sparkles, ArrowLeft } from 'lucide-react';
 
 const Profile: React.FC<{ user: any }> = ({ user }) => {
+  const navigate = useNavigate();
   const [name, setName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [bio, setBio] = useState('');
@@ -90,30 +92,44 @@ const Profile: React.FC<{ user: any }> = ({ user }) => {
     <Layout userData={user}>
       <div className="max-w-4xl mx-auto space-y-8 pb-12">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800 pb-6">
-          <div>
+          <div className="space-y-2">
+            <button
+              onClick={() => {
+                if (window.history.length > 1) {
+                  navigate(-1);
+                } else {
+                  navigate(isTrainer ? '/dashboard?tab=dashboard' : '/dashboard?tab=profile');
+                }
+              }}
+              aria-label="Go back"
+              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors min-h-[44px] py-2 px-1 focus-visible:ring-2 focus-visible:ring-brand-red focus:outline-none rounded-lg"
+            >
+              <ArrowLeft className="w-4 h-4 text-brand-red" />
+              <span>Back</span>
+            </button>
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 bg-brand-red/20 text-brand-red font-mono text-[10px] uppercase font-black rounded-md tracking-wider">
-                {user?.role || 'MEMBER'} REGISTRY
+              <span className="px-2.5 py-0.5 bg-brand-red/20 text-brand-red font-mono text-[10px] uppercase font-bold rounded-md tracking-wider">
+                {user?.role || 'CLIENT'}
               </span>
-              <span className="text-xs font-mono text-emerald-400 flex items-center gap-1 font-bold">
-                <ShieldCheck className="w-3.5 h-3.5" /> VERIFIED ACCOUNT
+              <span className="text-xs font-mono text-emerald-400 flex items-center gap-1 font-medium">
+                <ShieldCheck className="w-3.5 h-3.5" /> Verified account
               </span>
             </div>
-            <h2 className="text-3xl font-display italic uppercase tracking-wider text-white mt-1">
-              {isTrainer ? 'Trainer Profile & Credentials' : 'Member Profile Settings'}
+            <h2 className="text-2xl sm:text-3xl font-display uppercase tracking-wider text-white">
+              {isTrainer ? 'Trainer Profile & Credentials' : 'My Profile'}
             </h2>
           </div>
           
           <button
             onClick={handleSaveProfile}
             disabled={isSaving}
-            className="px-6 py-3 bg-brand-red hover:bg-neutral-100 text-white hover:text-black font-mono text-xs uppercase font-extrabold tracking-wider rounded-xl transition-all shadow-[0_0_20px_rgba(255,0,0,0.2)] disabled:opacity-50 self-start sm:self-auto flex items-center gap-2"
+            className="px-6 py-3 min-h-[44px] bg-brand-red hover:bg-neutral-100 text-white hover:text-black font-semibold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[0_0_20px_rgba(255,0,0,0.2)] disabled:opacity-50 self-start sm:self-auto flex items-center justify-center gap-2 cursor-pointer focus-visible:ring-2 focus-visible:ring-white focus:outline-none"
           >
             {isSaving ? (
-              <span>Saving Profile...</span>
+              <span>Saving changes...</span>
             ) : (
               <>
-                <Check className="w-4 h-4" /> Save & Publish Profile
+                <Check className="w-4 h-4" /> Save changes
               </>
             )}
           </button>

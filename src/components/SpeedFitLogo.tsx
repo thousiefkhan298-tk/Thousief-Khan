@@ -1,8 +1,8 @@
 import React from 'react';
 
-export const SpeedFitLogo = () => {
+export const SpeedFitLogo: React.FC<{ className?: string }> = ({ className = '' }) => {
   return (
-    <div className="flex items-center gap-3">
+    <div className={`flex items-center gap-3 ${className}`}>
       <div className="relative font-black text-2xl tracking-tighter flex items-center justify-center">
         {/* White TK */}
         <span className="text-white italic">TK</span>

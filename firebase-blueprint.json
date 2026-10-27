@@ -298,9 +298,84 @@
         "achievement": { "type": "string" }
       },
       "required": ["clientName", "bodyQuote", "trainerId", "createdAt"]
+    },
+    "ProgressRecord": {
+      "title": "ProgressRecord",
+      "description": "Trainer-recorded progress evaluation, measurements, and client-visible feedback",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "reviewDate": { "type": "string", "format": "date" },
+        "weight": { "type": "string" },
+        "clientVisibleFeedback": { "type": "string" },
+        "privateTrainerNotes": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "clientVisibleFeedback"]
+    },
+    "InAppNotification": {
+      "title": "InAppNotification",
+      "description": "System or trainer notifications for sessions, payments, and workouts",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "message"]
+    },
+    "PendingDraft": {
+      "title": "PendingDraft",
+      "description": "Pending draft workout or diet plan awaiting trainer review or client assignment",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "status": { "type": "string" },
+        "plan": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId"]
+    },
+    "LeadSubmission": {
+      "title": "LeadSubmission",
+      "description": "Public lead assessment intake record",
+      "type": "object",
+      "properties": {
+        "createdAt": { "type": "string", "format": "date-time" },
+        "source": { "type": "string" },
+        "status": { "type": "string", "enum": ["New", "Contacted", "Qualified", "Assessment Booked", "Won", "Not Now"] },
+        "followUpAt": { "type": "string", "format": "date-time" },
+        "assignedTrainerId": { "type": "string" },
+        "contact": { "type": "object" },
+        "goals": { "type": "object" },
+        "assessment": { "type": "object" },
+        "healthFlags": { "type": "array" },
+        "consent": { "type": "object" }
+      },
+      "required": ["createdAt", "source", "status", "contact", "goals", "assessment", "consent"]
     }
   },
   "firestore": {
+    "/leadSubmissions/{docId}": {
+      "schema": { "$ref": "LeadSubmission" },
+      "description": "Lead assessment submissions for trainers"
+    },
+    "/pendingDrafts/{docId}": {
+      "schema": { "$ref": "PendingDraft" },
+      "description": "Pending plan drafts awaiting trainer review"
+    },
+    "/progressRecords/{docId}": {
+      "schema": { "$ref": "ProgressRecord" },
+      "description": "Trainer progress reviews and measurements"
+    },
+    "/notifications/{docId}": {
+      "schema": { "$ref": "InAppNotification" },
+      "description": "In-app notifications"
+    },
     "/testimonials/{docId}": {
       "schema": { "$ref": "Testimonial" },
       "description": "Transformation testimonials posted by key trainers"

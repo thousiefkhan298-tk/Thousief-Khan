@@ -1,189 +1,264 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../../services/firebaseService';
-import { ClientDetails, HealthAssessment, ConcernForm, FitnessAssessment } from '../../types';
+import { ClientDetails, FitnessAssessmentData, MedicalAssessmentData, DietPreferencesData, TermsConsentData } from '../../types';
 import Step1Details from './Step1Details';
-import StepGoalsAndConcerns from './StepGoalsAndConcerns';
-import Step2Health from './Step2Health';
-import StepBMIReport from './StepBMIReport';
-import StepFitness from './StepFitness';
-import Step4Consent from './Step4Consent';
-
+import Step2FitnessAssessment from './Step2FitnessAssessment';
+import Step3MedicalAssessment from './Step3MedicalAssessment';
+import Step4DietPreferences from './Step4DietPreferences';
+import Step5TermsAndConsent from './Step5TermsAndConsent';
+import { SpeedFitLogo } from '../../components/SpeedFitLogo';
+import { Check, Shield } from 'lucide-react';
 
 interface Props {
   user: any;
   userData: any;
 }
 
+const STEP_TITLES = [
+  'Basic Profile',
+  'Fitness Assessment',
+  'Medical Assessment',
+  'Diet Preferences',
+  'Terms & Consent'
+];
+
 const OnboardingFlow: React.FC<Props> = ({ user, userData }) => {
-  const [step, setStep] = useState(1);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [savingStep, setSavingStep] = useState(false);
 
-  const [clientDetails, setClientDetails] = useState<Partial<ClientDetails>>({
-    fullName: userData?.name || '',
+  // Resume step from saved draft if available
+  const initialStep = (userData?.onboardingStep && userData.onboardingStep >= 1 && userData.onboardingStep <= 5)
+    ? userData.onboardingStep
+    : 1;
+  const [step, setStep] = useState(initialStep);
+
+  const existingDraft = userData?.onboardingDraft || {};
+
+  // Form states initialized with existing draft or profile data
+  const [clientDetails, setClientDetails] = useState<Partial<ClientDetails>>(() => ({
+    fullName: existingDraft.clientDetails?.fullName || userData?.clientDetails?.fullName || userData?.name || '',
     email: user?.email || '',
-    age: '',
-    dob: '',
-    gender: '',
-    phoneNumber: '',
-    address: '',
-    emergencyContact: ''
-  });
+    dob: existingDraft.clientDetails?.dob || userData?.clientDetails?.dob || '',
+    phoneNumber: existingDraft.clientDetails?.phoneNumber || userData?.clientDetails?.phoneNumber || userData?.phoneNumber || '',
+    occupation: existingDraft.clientDetails?.occupation || userData?.clientDetails?.occupation || '',
+    emergencyContact: existingDraft.clientDetails?.emergencyContact || userData?.clientDetails?.emergencyContact || ''
+  }));
 
-  const [concern, setConcern] = useState<Partial<ConcernForm>>({
-    primaryConcern: '',
-    secondaryConcern: '',
-    expectations: '',
-    limitations: ''
-  });
+  const [fitnessAssessment, setFitnessAssessment] = useState<Partial<FitnessAssessmentData>>(() => ({
+    height: existingDraft.fitnessAssessment?.height || userData?.fitnessAssessment?.height || userData?.healthAssessment?.height || '',
+    weight: existingDraft.fitnessAssessment?.weight || userData?.fitnessAssessment?.weight || userData?.healthAssessment?.weight || '',
+    goals: existingDraft.fitnessAssessment?.goals || userData?.fitnessAssessment?.goals || userData?.healthAssessment?.goals || ['Fat Loss & Weight Management'],
+    trainingExperience: existingDraft.fitnessAssessment?.trainingExperience || userData?.fitnessAssessment?.trainingExperience || 'Beginner',
+    activityLevel: existingDraft.fitnessAssessment?.activityLevel || userData?.fitnessAssessment?.activityLevel || 'Moderately Active',
+    equipment: existingDraft.fitnessAssessment?.equipment || userData?.fitnessAssessment?.equipment || ['Full Gym (Barbells, Dumbbells, Machines, Cables)'],
+    preferredTrainingTimes: existingDraft.fitnessAssessment?.preferredTrainingTimes || userData?.fitnessAssessment?.preferredTrainingTimes || ['Morning (8:00 AM - 11:00 AM)']
+  }));
 
-  const [healthAssessment, setHealthAssessment] = useState<Partial<HealthAssessment>>({
-    conditions: [],
-    otherConditions: '',
-    smoking: false,
-    alcohol: false,
-    stress: 'Low',
-    occupation: 'Sedentary',
-    sleepHours: '',
-    currentlyActive: false,
-    pastExperience: '',
-    trainingDaysPerWeek: '',
-    goals: [],
-    targetWeight: '',
-    targetDate: '',
-    height: '',
-    weight: '',
-    waist: '',
-    painActivities: [],
-    medications: '',
-    confirmed: false,
-    consentGiven: false,
-    healthConcerns: ''
-  });
+  const [medicalAssessment, setMedicalAssessment] = useState<Partial<MedicalAssessmentData>>(() => ({
+    noKnownConditions: existingDraft.medicalAssessment?.noKnownConditions !== undefined
+      ? existingDraft.medicalAssessment.noKnownConditions
+      : (userData?.medicalAssessment?.noKnownConditions ?? false),
+    conditions: existingDraft.medicalAssessment?.conditions || userData?.medicalAssessment?.conditions || userData?.healthAssessment?.conditions || [],
+    otherConditions: existingDraft.medicalAssessment?.otherConditions || userData?.medicalAssessment?.otherConditions || '',
+    injuriesOrSurgeries: existingDraft.medicalAssessment?.injuriesOrSurgeries || userData?.medicalAssessment?.injuriesOrSurgeries || '',
+    painOrRestrictions: existingDraft.medicalAssessment?.painOrRestrictions || userData?.medicalAssessment?.painOrRestrictions || userData?.healthAssessment?.painActivities || ['None'],
+    medications: existingDraft.medicalAssessment?.medications || userData?.medicalAssessment?.medications || userData?.healthAssessment?.medications || '',
+    allergies: existingDraft.medicalAssessment?.allergies || userData?.medicalAssessment?.allergies || '',
+    doctorRestrictions: existingDraft.medicalAssessment?.doctorRestrictions || userData?.medicalAssessment?.doctorRestrictions || '',
+    flaggedForReview: existingDraft.medicalAssessment?.flaggedForReview ?? false
+  }));
 
-  const [fitnessAssessment, setFitnessAssessment] = useState<Partial<FitnessAssessment>>({
-    clientId: user?.uid || '',
-    date: new Date().toISOString().split('T')[0],
-    dob: '',
-    gender: '',
-    assessNum: '1',
-    admin: '',
-    height: '',
-    weight: '',
-    bodyFat: { triceps: '', chest: '', midAxillary: '', subScapular: '', abdomen: '', supraIliac: '', thigh: '' },
-    circumference: { neck: '', shoulders: '', chest: '', waist: '', hips: '', rightThigh: '', leftThigh: '', rightUpperArm: '', leftUpperArm: '' },
-    movementScreen: {
-      deepSquat: { raw: '', final: '', comments: '' },
-      hurdleStepL: { raw: '', final: '', comments: '' },
-      hurdleStepR: { raw: '', final: '', comments: '' },
-      inlineLungeL: { raw: '', final: '', comments: '' },
-      inlineLungeR: { raw: '', final: '', comments: '' },
-      shoulderMobilityL: { raw: '', final: '', comments: '' },
-      shoulderMobilityR: { raw: '', final: '', comments: '' },
-      impingementL: { raw: '', final: '', comments: '' },
-      impingementR: { raw: '', final: '', comments: '' },
-      straightLegRaiseL: { raw: '', final: '', comments: '' },
-      straightLegRaiseR: { raw: '', final: '', comments: '' },
-      trunkStability: { raw: '', final: '', comments: '' },
-      pressUpClearing: { raw: '', final: '', comments: '' },
-      rotaryStabilityL: { raw: '', final: '', comments: '' },
-      rotaryStabilityR: { raw: '', final: '', comments: '' },
-      posteriorRocking: { raw: '', final: '', comments: '' },
-      totalScore: ''
+  const [dietPreferences, setDietPreferences] = useState<Partial<DietPreferencesData>>(() => ({
+    preference: existingDraft.dietPreferences?.preference || userData?.dietPreferences?.preference || 'Non-Vegetarian',
+    foodAllergies: existingDraft.dietPreferences?.foodAllergies || userData?.dietPreferences?.foodAllergies || ['None'],
+    mealTimings: existingDraft.dietPreferences?.mealTimings || userData?.dietPreferences?.mealTimings || {
+      breakfast: '08:30',
+      lunch: '13:30',
+      eveningSnack: '17:30',
+      dinner: '21:00'
     },
-    physicalTests: {
-      stepTestBpm: '',
-      calorieBurnAirDyne: '',
-      maximalWallSitTime: '',
-      pushUps: '',
-      maximalPlankTime: ''
-    },
-    postureAnalysis: '',
-    notes: ''
-  });
+    dietaryRestrictions: existingDraft.dietPreferences?.dietaryRestrictions || userData?.dietPreferences?.dietaryRestrictions || ''
+  }));
 
-  const handleNext = () => setStep(s => s + 1);
-  const handleBack = () => setStep(s => s - 1);
+  const [termsConsent, setTermsConsent] = useState<Partial<TermsConsentData>>(() => ({
+    accepted: existingDraft.termsConsent?.accepted || false,
+    typedFullName: existingDraft.termsConsent?.typedFullName || clientDetails.fullName || '',
+    termsVersion: '2.5'
+  }));
 
-  const handleSubmit = async () => {
+  // Auto-save partial progress to Firestore whenever moving between steps
+  const saveCurrentDraft = async (nextStepNumber: number) => {
+    if (!user?.uid) return;
+    setSavingStep(true);
+    try {
+      const payload = {
+        clientDetails,
+        fitnessAssessment,
+        medicalAssessment,
+        dietPreferences,
+        termsConsent
+      };
+      await firebaseService.saveOnboardingProgress(user.uid, nextStepNumber, payload);
+    } catch (err) {
+      console.warn('Could not save draft progress to cloud:', err);
+    } finally {
+      setSavingStep(false);
+    }
+  };
+
+  const handleNext = async () => {
+    const nextStep = step + 1;
+    await saveCurrentDraft(nextStep);
+    setStep(nextStep);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleBack = () => {
+    const prevStep = Math.max(1, step - 1);
+    setStep(prevStep);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleFinalSubmit = async () => {
+    if (!user?.uid) return;
     setLoading(true);
     try {
       await firebaseService.submitOnboarding(user.uid, {
         clientDetails,
-        concern,
-        healthAssessment: {
-          ...healthAssessment,
-          confirmed: true
+        fitnessAssessment,
+        medicalAssessment,
+        dietPreferences,
+        termsConsent: {
+          ...termsConsent,
+          accepted: true,
+          acceptedAt: new Date().toISOString(),
+          termsVersion: '2.5'
         },
-        fitnessAssessment
+        name: clientDetails.fullName || userData?.name || 'Athlete'
       });
 
-      // Force reload to update app state
+      // Clear draft flag and navigate to dashboard
       window.location.href = '/dashboard';
-    } catch (error) {
-      console.error('Error saving onboarding data:', error);
-      alert('Failed to save data. Please try again.');
+    } catch (error: any) {
+      console.error('Error completing onboarding:', error);
+      alert('Failed to save assessment. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-brand-dark py-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Background Grid */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:40px_40px]"></div>
-      
-      <div className="max-w-3xl mx-auto relative z-10">
-        <div className="mb-16 text-center">
-          <div className="flex items-center justify-center space-x-3 mb-6">
-            <div className="h-[1px] w-12 bg-neutral-800"></div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.5em] text-brand-red/80">BUILD TO TRANSFORMATION</p>
-            <div className="h-[1px] w-12 bg-neutral-800"></div>
-          </div>
-          
-          <h2 className="text-6xl font-display italic uppercase leading-tight mb-8 text-white">
-            {step === 1 && <>Personal <span className="text-brand-red">Details</span></>}
-            {step === 2 && <>Goals & <span className="text-brand-red">Concerns</span></>}
-            {step === 3 && <>Health <span className="text-brand-red">Scan</span></>}
-            {step === 4 && <>Health <span className="text-brand-red">Report</span></>}
-            {step === 5 && <>Fitness <span className="text-brand-red">Metrics</span></>}
-            {step === 6 && <>Final <span className="text-brand-red">Clearance</span></>}
-          </h2>
+    <div className="min-h-screen bg-[#0F0F11] text-white py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden font-sans">
+      {/* Background Ambience */}
+      <div className="absolute inset-0 bg-[radial-gradient(#FF3B30_0.5px,transparent_0.5px)] opacity-5 [background-size:24px_24px] pointer-events-none"></div>
 
-          <div className="flex justify-center items-center space-x-4">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="flex items-center">
-                <div className={`w-3 h-3 rounded-full transition-all duration-500 ${step >= i ? 'bg-brand-red shadow-[0_0_10px_rgba(255,0,0,0.5)]' : 'bg-neutral-800'}`} />
-                {i < 6 && <div className={`h-[1px] w-12 transition-all duration-500 ${step > i ? 'bg-brand-red' : 'bg-neutral-800'}`} />}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-neutral-800/50 backdrop-blur-xl border border-neutral-700 rounded-[2.5rem] p-10 shadow-2xl">
-          {step === 1 && (
-            <Step1Details details={clientDetails} onChange={setClientDetails} onNext={handleNext} />
-          )}
-          {step === 2 && (
-            <StepGoalsAndConcerns assessment={healthAssessment} concern={concern} onChangeAssessment={setHealthAssessment} onChangeConcern={setConcern} onNext={handleNext} onBack={handleBack} />
-          )}
-          {step === 3 && (
-            <Step2Health assessment={healthAssessment} onChange={setHealthAssessment} onNext={handleNext} onBack={handleBack} />
-          )}
-          {step === 4 && (
-            <StepBMIReport assessment={healthAssessment} clientDetails={clientDetails} onChange={setHealthAssessment} onNext={handleNext} onBack={handleBack} />
-          )}
-          {step === 5 && (
-            <StepFitness assessment={fitnessAssessment} onChange={setFitnessAssessment} onNext={handleNext} onBack={handleBack} />
-          )}
-          {step === 6 && (
-            <Step4Consent assessment={healthAssessment} onChange={setHealthAssessment} onSubmit={handleSubmit} onBack={handleBack} />
-          )}
-        </div>
+      <div className="max-w-2xl mx-auto relative z-10">
         
-        <p className="mt-12 text-center font-mono text-[8px] uppercase tracking-[0.4em] text-neutral-50 font-bold">
-          Secure Data Encryption Active // SpeedFit Systems v2.5
+        {/* SPEED FIT Header Branding */}
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-3">
+            <SpeedFitLogo className="h-10 w-auto" />
+          </div>
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <Shield className="w-3.5 h-3.5 text-[#FF3B30]" />
+            <span className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#FF3B30] font-bold">
+              Client Onboarding & Assessment
+            </span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold uppercase tracking-tight text-white">
+            {STEP_TITLES[step - 1]}
+          </h1>
+          <p className="text-xs text-neutral-400 font-mono mt-1">
+            Complete this initial intake to open your personalized Speed Fit dashboard.
+          </p>
+
+          {savingStep && (
+            <p className="text-[10px] font-mono text-neutral-500 animate-pulse mt-1">
+              Saving draft progress...
+            </p>
+          )}
+
+          {/* 5-Step Progress Indicators */}
+          <div className="flex items-center justify-center gap-2 sm:gap-3 mt-6">
+            {[1, 2, 3, 4, 5].map((s) => {
+              const isDone = step > s;
+              const isCurrent = step === s;
+              return (
+                <div key={s} className="flex items-center gap-2">
+                  <div
+                    className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-mono font-bold transition-all ${
+                      isDone
+                        ? 'bg-[#FF3B30] text-white shadow-sm'
+                        : isCurrent
+                        ? 'bg-white text-black ring-2 ring-[#FF3B30]'
+                        : 'bg-[#1E1E22] text-neutral-500 border border-neutral-800'
+                    }`}
+                  >
+                    {isDone ? <Check className="w-3.5 h-3.5" /> : s}
+                  </div>
+                  {s < 5 && (
+                    <div className={`w-4 sm:w-8 h-0.5 rounded transition-colors ${step > s ? 'bg-[#FF3B30]' : 'bg-neutral-800'}`} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Card Container */}
+        <div className="bg-[#141417] border border-neutral-800/80 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-md">
+          {step === 1 && (
+            <Step1Details
+              details={clientDetails}
+              onChange={setClientDetails}
+              onNext={handleNext}
+            />
+          )}
+
+          {step === 2 && (
+            <Step2FitnessAssessment
+              fitness={fitnessAssessment}
+              onChange={setFitnessAssessment}
+              onNext={handleNext}
+              onBack={handleBack}
+            />
+          )}
+
+          {step === 3 && (
+            <Step3MedicalAssessment
+              medical={medicalAssessment}
+              onChange={setMedicalAssessment}
+              onNext={handleNext}
+              onBack={handleBack}
+            />
+          )}
+
+          {step === 4 && (
+            <Step4DietPreferences
+              diet={dietPreferences}
+              onChange={setDietPreferences}
+              onNext={handleNext}
+              onBack={handleBack}
+            />
+          )}
+
+          {step === 5 && (
+            <Step5TermsAndConsent
+              termsConsent={termsConsent}
+              clientFullName={clientDetails.fullName || ''}
+              onChange={setTermsConsent}
+              onSubmit={handleFinalSubmit}
+              onBack={handleBack}
+              loading={loading}
+            />
+          )}
+        </div>
+
+        {/* Footer info */}
+        <p className="mt-8 text-center text-[10px] font-mono uppercase tracking-widest text-neutral-500">
+          Encrypted Storage // Speed Fit Training Systems
         </p>
       </div>
     </div>

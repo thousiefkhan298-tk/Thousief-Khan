@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import QRCodeDisplay from '../components/QRCodeDisplay';
 import { notificationService } from '../services/notificationService';
 import { motion } from 'motion/react';
-import { Download, Laptop, Smartphone, FileArchive, Globe } from 'lucide-react';
+import { Download, Laptop, Smartphone, FileArchive, Globe, ArrowLeft } from 'lucide-react';
 
 const Settings: React.FC<{ user: any }> = ({ user }) => {
+  const navigate = useNavigate();
   const getSharedUrl = () => {
     if (typeof window === 'undefined') return "https://ais-pre-fviwvcuvuktbwhm63injwf-146940753580.asia-southeast1.run.app";
     let origin = window.location.origin;
@@ -99,9 +101,27 @@ const Settings: React.FC<{ user: any }> = ({ user }) => {
 
   return (
     <Layout userData={user}>
-      <div className="space-y-8">
-        <div className="flex items-center justify-between">
-          <h2 className={`text-3xl font-display italic uppercase tracking-wider transition-colors duration-300 ${isDark ? 'text-white' : 'text-slate-900'}`}>System Settings</h2>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <button
+              onClick={() => {
+                if (window.history.length > 1) {
+                  navigate(-1);
+                } else {
+                  navigate(user?.role === 'TRAINER' ? '/dashboard?tab=dashboard' : '/dashboard?tab=home');
+                }
+              }}
+              aria-label="Go back"
+              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors min-h-[44px] py-2 px-1 focus-visible:ring-2 focus-visible:ring-brand-red focus:outline-none rounded-lg"
+            >
+              <ArrowLeft className="w-4 h-4 text-brand-red" />
+              <span>Back</span>
+            </button>
+            <h2 className={`text-2xl sm:text-3xl font-display uppercase tracking-wider transition-colors duration-300 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              Settings
+            </h2>
+          </div>
         </div>
         
         <div className={`rounded-[2.5rem] p-10 shadow-xl transition-all duration-300 border ${

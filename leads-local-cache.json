@@ -1,0 +1,327 @@
+[
+  {
+    "id": "lead_1792918186778_e4k5z",
+    "createdAt": "2026-10-25T08:49:46.556Z",
+    "updatedAt": "2026-10-25T08:49:46.556Z",
+    "source": "public_assessment",
+    "status": "Won",
+    "followUpAt": "2026-10-26T08:49:46.556Z",
+    "assignedTrainerId": "thousiefkhan298@gmail.com",
+    "contact": {
+      "name": "Kavita Rao Updated",
+      "whatsapp": "+91 99887 76655",
+      "email": "kavita.rao@example.com",
+      "age": null,
+      "sex": "Unspecified",
+      "height": null,
+      "weight": null
+    },
+    "goals": {
+      "primaryGoal": "Marathon Prep",
+      "targetWeight": "",
+      "timeline": "3 months",
+      "motivationNotes": ""
+    },
+    "assessment": {
+      "training": {
+        "experience": "Beginner",
+        "currentActivity": "Sedentary",
+        "location": "Speed Fit Gym",
+        "equipmentAccess": [],
+        "sessionsPerWeek": 3,
+        "sessionLength": "45 mins",
+        "availability": []
+      },
+      "parq": {},
+      "injuriesAndMedicalNotes": "",
+      "dailyLife": {}
+    },
+    "healthFlags": [],
+    "consent": {
+      "accepted": true,
+      "acceptedAt": "2026-10-25T08:49:46.556Z",
+      "acknowledgedNotMedical": true
+    },
+    "trainerNotes": "",
+    "followUpHistory": [],
+    "convertedClientId": "client_1792918179020",
+    "convertedAt": "2026-10-25T08:49:51.663Z"
+  },
+  {
+    "id": "lead_1792918173543_5rsry",
+    "createdAt": "2026-10-25T08:49:33.283Z",
+    "updatedAt": "2026-10-25T08:49:33.283Z",
+    "source": "public_assessment",
+    "status": "Won",
+    "followUpAt": "2026-10-26T08:49:33.283Z",
+    "assignedTrainerId": "thousiefkhan298@gmail.com",
+    "contact": {
+      "name": "Kavita Rao",
+      "whatsapp": "+91 99887 76655",
+      "email": "kavita.rao@example.com",
+      "age": null,
+      "sex": "Unspecified",
+      "height": null,
+      "weight": null
+    },
+    "goals": {
+      "primaryGoal": "Strength Training",
+      "targetWeight": "",
+      "timeline": "3 months",
+      "motivationNotes": ""
+    },
+    "assessment": {
+      "training": {
+        "experience": "Beginner",
+        "currentActivity": "Sedentary",
+        "location": "Speed Fit Gym",
+        "equipmentAccess": [],
+        "sessionsPerWeek": 3,
+        "sessionLength": "45 mins",
+        "availability": []
+      },
+      "parq": {},
+      "injuriesAndMedicalNotes": "",
+      "dailyLife": {}
+    },
+    "healthFlags": [],
+    "consent": {
+      "accepted": true,
+      "acceptedAt": "2026-10-25T08:49:33.283Z",
+      "acknowledgedNotMedical": true
+    },
+    "trainerNotes": "",
+    "followUpHistory": [],
+    "convertedClientId": "client_1792918179020",
+    "convertedAt": "2026-10-25T08:49:39.018Z"
+  },
+  {
+    "id": "lead_1792918146631_hg92x",
+    "createdAt": "2026-10-25T08:49:06.394Z",
+    "updatedAt": "2026-10-25T08:49:06.394Z",
+    "source": "public_assessment",
+    "status": "Won",
+    "followUpAt": "2026-10-26T08:49:06.394Z",
+    "assignedTrainerId": "thousiefkhan298@gmail.com",
+    "contact": {
+      "name": "Aarav Mehta Returning",
+      "whatsapp": "+91 98765 12345",
+      "email": "aarav.mehta@example.com",
+      "age": null,
+      "sex": "Unspecified",
+      "height": null,
+      "weight": null
+    },
+    "goals": {
+      "primaryGoal": "Strength & Performance",
+      "targetWeight": "",
+      "timeline": "3 months",
+      "motivationNotes": ""
+    },
+    "assessment": {
+      "training": {
+        "experience": "Beginner",
+        "currentActivity": "Sedentary",
+        "location": "Speed Fit Gym",
+        "equipmentAccess": [],
+        "sessionsPerWeek": 3,
+        "sessionLength": "45 mins",
+        "availability": []
+      },
+      "parq": {},
+      "injuriesAndMedicalNotes": "",
+      "dailyLife": {}
+    },
+    "healthFlags": [],
+    "consent": {
+      "accepted": true,
+      "acceptedAt": "2026-10-25T08:49:06.394Z",
+      "acknowledgedNotMedical": true
+    },
+    "trainerNotes": "",
+    "followUpHistory": [],
+    "convertedClientId": "client_1792918152678",
+    "convertedAt": "2026-10-25T08:49:12.676Z"
+  },
+  {
+    "id": "lead_1792918129951_w7ht1",
+    "createdAt": "2026-10-25T08:48:49.688Z",
+    "updatedAt": "2026-10-25T09:03:06.935Z",
+    "source": "public_assessment",
+    "status": "Contacted",
+    "followUpAt": "2026-10-26T08:48:49.688Z",
+    "assignedTrainerId": "thousiefkhan298@gmail.com",
+    "contact": {
+      "name": "Aarav Mehta",
+      "whatsapp": "+91 98765 12345",
+      "email": "aarav.mehta@example.com",
+      "age": 29,
+      "sex": "Male",
+      "height": 178,
+      "weight": 84
+    },
+    "goals": {
+      "primaryGoal": "Fat Loss & Muscle Definition",
+      "targetWeight": 76,
+      "timeline": "3 months",
+      "motivationNotes": ""
+    },
+    "assessment": {
+      "training": {
+        "experience": "Intermediate",
+        "currentActivity": "Light",
+        "location": "Speed Fit Gym",
+        "sessionsPerWeek": 4,
+        "sessionLength": "60 mins",
+        "availability": [
+          "Morning 6am - 9am"
+        ]
+      },
+      "parq": {
+        "boneOrJointIssue": true
+      },
+      "injuriesAndMedicalNotes": "Mild lower back stiffness on heavy deadlifts",
+      "dailyLife": {
+        "sleepHours": "6-7 hours",
+        "waterIntakeLiters": "2-3 Liters",
+        "stressLevel": "Moderate",
+        "dietPreference": "Non-Vegetarian",
+        "tobaccoUse": "None",
+        "alcoholUse": "Socially",
+        "allergies": "None"
+      }
+    },
+    "healthFlags": [
+      "CAUTION: Bone, joint, or spinal condition aggravated by movement",
+      "ORTHOPEDIC: Spinal / lumbar injury history reported",
+      "ALLERGIES: None"
+    ],
+    "consent": {
+      "accepted": true,
+      "acceptedAt": "2026-10-25T08:48:49.688Z",
+      "acknowledgedNotMedical": true
+    },
+    "trainerNotes": "Spoke to Aarav on WhatsApp. Discussed lower back modifications for deadlifts.",
+    "followUpHistory": [
+      {
+        "date": "2026-10-25T09:00:00.000Z",
+        "stage": "immediate",
+        "channel": "whatsapp",
+        "note": "Opened WhatsApp with immediate message"
+      }
+    ],
+    "convertedClientId": "client_1792918142184",
+    "convertedAt": "2026-10-25T08:49:02.183Z"
+  },
+  {
+    "id": "lead_1792917883282_k8vrs",
+    "createdAt": "2026-10-25T08:44:43.017Z",
+    "updatedAt": "2026-10-25T08:44:43.017Z",
+    "source": "public_assessment",
+    "status": "Won",
+    "followUpAt": "2026-10-26T08:44:43.016Z",
+    "assignedTrainerId": "thousiefkhan298@gmail.com",
+    "contact": {
+      "name": "Aman Gupta Repeated",
+      "whatsapp": "9876543210",
+      "email": "aman@example.com",
+      "age": null,
+      "sex": "Unspecified",
+      "height": null,
+      "weight": null
+    },
+    "goals": {
+      "primaryGoal": "Muscle Gain",
+      "targetWeight": "",
+      "timeline": "3 months",
+      "motivationNotes": ""
+    },
+    "assessment": {
+      "training": {
+        "experience": "Beginner",
+        "currentActivity": "Sedentary",
+        "location": "Speed Fit Gym",
+        "equipmentAccess": [],
+        "sessionsPerWeek": 3,
+        "sessionLength": "45 mins",
+        "availability": []
+      },
+      "parq": {},
+      "injuriesAndMedicalNotes": "",
+      "dailyLife": {}
+    },
+    "healthFlags": [],
+    "consent": {
+      "accepted": true,
+      "acceptedAt": "2026-10-25T08:44:43.017Z",
+      "acknowledgedNotMedical": true
+    },
+    "trainerNotes": "",
+    "followUpHistory": [],
+    "convertedClientId": "client_1792917890005",
+    "convertedAt": "2026-10-25T08:44:50.004Z"
+  },
+  {
+    "id": "lead_1792917864940_j889g",
+    "createdAt": "2026-10-25T08:44:24.638Z",
+    "updatedAt": "2026-10-25T08:44:24.638Z",
+    "source": "public_assessment",
+    "status": "Won",
+    "followUpAt": "2026-10-26T08:44:24.638Z",
+    "assignedTrainerId": "thousiefkhan298@gmail.com",
+    "contact": {
+      "name": "Aman Gupta",
+      "whatsapp": "9876543210",
+      "email": "aman@example.com",
+      "age": 30,
+      "sex": "Male",
+      "height": 178,
+      "weight": 84
+    },
+    "goals": {
+      "primaryGoal": "Fat Loss",
+      "targetWeight": "",
+      "timeline": "3 months",
+      "motivationNotes": ""
+    },
+    "assessment": {
+      "training": {
+        "experience": "Beginner",
+        "currentActivity": "Sedentary",
+        "location": "Speed Fit Gym",
+        "equipmentAccess": [
+          "Dumbbells"
+        ],
+        "sessionsPerWeek": "4",
+        "sessionLength": "45 mins",
+        "availability": [
+          "Evening (5 PM - 8 PM)"
+        ]
+      },
+      "parq": {
+        "heartCondition": false,
+        "chestPainActive": false,
+        "chestPainRest": false,
+        "dizzinessOrBalance": false,
+        "boneOrJointIssue": false,
+        "bloodPressureOrHeartMeds": false,
+        "otherReasonNoExercise": false
+      },
+      "injuriesAndMedicalNotes": "",
+      "dailyLife": {
+        "sleepHours": "7-8 hours",
+        "stressLevel": "Moderate"
+      }
+    },
+    "healthFlags": [],
+    "consent": {
+      "accepted": true,
+      "acceptedAt": "2026-10-25T08:44:24.638Z",
+      "acknowledgedNotMedical": true
+    },
+    "trainerNotes": "",
+    "followUpHistory": [],
+    "convertedClientId": "client_1792917876935",
+    "convertedAt": "2026-10-25T08:44:36.934Z"
+  }
+]

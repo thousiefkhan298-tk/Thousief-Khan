@@ -526,11 +526,14 @@ const ClientProfile: React.FC = () => {
 
       const updatedTxList = [...(record.transactions || []), newTx];
       const totalPaid = updatedTxList.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-      const recordAmount = Number(record.amount) || 0;
-      const newStatus = totalPaid >= recordAmount ? 'Paid' : record.status;
+      const recordAmount = Number(record.feeINR || record.amount) || 0;
+      const outstanding = Math.max(0, recordAmount - totalPaid);
+      const newStatus = outstanding === 0 ? 'Paid' : (totalPaid > 0 ? 'Partially Paid' : (record.dueDate && new Date(record.dueDate) < new Date() ? 'Overdue' : 'Due'));
 
       await firebaseService.updatePaymentRecord(recordId, {
         transactions: updatedTxList,
+        amountPaid: totalPaid,
+        outstandingBalance: outstanding,
         status: newStatus
       });
 
@@ -556,12 +559,15 @@ const ClientProfile: React.FC = () => {
 
     const updatedTxList = (record.transactions || []).filter(t => t.id !== txId);
     const totalPaid = updatedTxList.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-    const recordAmount = Number(record.amount) || 0;
-    const newStatus = totalPaid >= recordAmount ? 'Paid' : (record.status === 'Paid' ? 'Pending' : record.status);
+    const recordAmount = Number(record.feeINR || record.amount) || 0;
+    const outstanding = Math.max(0, recordAmount - totalPaid);
+    const newStatus = outstanding === 0 ? 'Paid' : (totalPaid > 0 ? 'Partially Paid' : (record.dueDate && new Date(record.dueDate) < new Date() ? 'Overdue' : 'Due'));
 
     try {
       await firebaseService.updatePaymentRecord(recordId, {
         transactions: updatedTxList,
+        amountPaid: totalPaid,
+        outstandingBalance: outstanding,
         status: newStatus
       });
     } catch (error) {
@@ -836,11 +842,18 @@ const ClientProfile: React.FC = () => {
     <Layout userData={userData}>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-10">
         <button 
-          onClick={() => navigate(-1)}
-          className="flex items-center space-x-3 text-white font-bold hover:text-brand-red transition-all group"
+          onClick={() => {
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate('/dashboard?tab=clients');
+            }
+          }}
+          aria-label="Go back to clients list"
+          className="flex items-center space-x-2 text-white font-medium hover:text-brand-red transition-all group min-h-[44px] py-2 px-1 focus-visible:ring-2 focus-visible:ring-brand-red focus:outline-none rounded-xl"
         >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-          <span className="font-mono text-[10px] uppercase tracking-widest">Go Back</span>
+          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform text-brand-red" />
+          <span className="text-sm">Back to clients</span>
         </button>
 
         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">

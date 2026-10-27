@@ -7,158 +7,72 @@
   --font-sub: "Montserrat", sans-serif;
   --font-mono: "Space Grotesk", monospace;
   --color-brand-red: var(--brand-red-color);
-  --color-brand-accent-red: #FF3B30;
-  --color-brand-charcoal: #1B1B1B;
-  --color-brand-dark: #111111;
-  --color-brand-card: #1F1F1F;
-  --color-brand-border: #2A2A2A;
-  --color-brand-hover: #2A2A2A;
-  --color-brand-success: #16A34A;
+  --color-brand-accent-red: #EF4444;
+  --color-brand-charcoal: #141417;
+  --color-brand-dark: #0D0D0F;
+  --color-brand-card: #141417;
+  --color-brand-border: #26262B;
+  --color-brand-hover: #1E1E24;
+  --color-brand-success: #10B981;
   --color-brand-warning: #F59E0B;
   --color-brand-error: #DC2626;
 
-  /* Overwrite Tailwind color scales to compile automatically to luxurious high-contrast non-glare Charcoal Black with clean white typography */
   --color-white: #ffffff;
-  
-  --color-slate-50: #111111;
-  --color-slate-100: #1B1B1B;
-  --color-slate-200: #1F1F1F;
-  --color-slate-300: #2A2A2A;
-  --color-slate-400: #424250;
-  --color-slate-500: #94a3b8;
-  --color-slate-600: #cbd5e1;
-  --color-slate-700: #e2e8f0;
-  --color-slate-800: #f1f5f9;
-  --color-slate-900: #ffffff;
-  --color-slate-950: #ffffff;
-
-  --color-neutral-50: #111111;
-  --color-neutral-100: #1B1B1B;
-  --color-neutral-200: #1F1F1F;
-  --color-neutral-300: #2A2A2A;
-  --color-neutral-400: #424250;
-  --color-neutral-500: #94a3b8;
-  --color-neutral-600: #cbd5e1;
-  --color-neutral-700: #e2e8f0;
-  --color-neutral-800: #f1f5f9;
-  --color-neutral-900: #ffffff;
-  --color-neutral-950: #ffffff;
-
-  --color-zinc-50: #111111;
-  --color-zinc-100: #1B1B1B;
-  --color-zinc-200: #1F1F1F;
-  --color-zinc-300: #2A2A2A;
-  --color-zinc-400: #424250;
-  --color-zinc-500: #94a3b8;
-  --color-zinc-600: #cbd5e1;
-  --color-zinc-700: #e2e8f0;
-  --color-zinc-800: #f1f5f9;
-  --color-zinc-900: #ffffff;
-  --color-zinc-950: #ffffff;
-
-  --color-gray-50: #111111;
-  --color-gray-100: #1B1B1B;
-  --color-gray-200: #1F1F1F;
-  --color-gray-300: #2A2A2A;
-  --color-gray-400: #424250;
-  --color-gray-500: #94a3b8;
-  --color-gray-600: #cbd5e1;
-  --color-gray-700: #e2e8f0;
-  --color-gray-800: #f1f5f9;
-  --color-gray-900: #ffffff;
-  --color-gray-950: #ffffff;
 }
 
 :root {
-  --brand-red-color: #e60000;
+  --brand-red-color: #DC2626;
+  --bg-primary: #0D0D0F;
+  --bg-card: #141417;
+  --border-primary: #26262B;
+  --text-primary: #FFFFFF;
+  --text-secondary: #94A3B8;
 }
 
 html.theme-monochrome {
-  --brand-red-color: #FFFFFF;
+  --brand-red-color: #E2E8F0;
 }
 
 html.theme-monochrome .bg-brand-red,
 html.theme-monochrome [class*="bg-red-"],
 html.theme-monochrome [class*="hover:bg-red-"]:hover,
 html.theme-monochrome .btn-primary {
-  background-color: #FFFFFF !important;
-  color: #000000 !important;
-}
-
-html.theme-monochrome .bg-brand-red *,
-html.theme-monochrome [class*="bg-red-"] *,
-html.theme-monochrome .btn-primary * {
-  color: #000000 !important;
-}
-
-html.theme-monochrome .bg-brand-red:hover,
-html.theme-monochrome .bg-brand-red *:hover,
-html.theme-monochrome [class*="bg-red-"]:hover,
-html.theme-monochrome .btn-primary:hover {
-  background-color: #E5E7EB !important;
-  color: #000000 !important;
+  background-color: #334155 !important;
+  color: #FFFFFF !important;
 }
 
 html.theme-monochrome .text-brand-red,
 html.theme-monochrome [class*="text-red-"] {
-  color: #FFFFFF !important;
+  color: #F8FAFC !important;
 }
 
 html.theme-monochrome .border-brand-red,
 html.theme-monochrome [class*="border-red-"],
 html.theme-monochrome [class*="hover:border-brand-red"]:hover {
-  border-color: #FFFFFF !important;
-}
-
-html.theme-monochrome [class*="ring-brand-red"] {
-  --tw-ring-color: #FFFFFF !important;
-}
-
-html.theme-monochrome [class*="bg-brand-red/10"],
-html.theme-monochrome [class*="bg-red-500/10"],
-html.theme-monochrome [class*="bg-rose-500/10"] {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-}
-html.theme-monochrome [class*="bg-brand-red/20"],
-html.theme-monochrome [class*="bg-red-500/20"],
-html.theme-monochrome [class*="bg-rose-500/20"] {
-  background-color: rgba(255, 255, 255, 0.2) !important;
-}
-html.theme-monochrome [class*="bg-brand-red/5"],
-html.theme-monochrome [class*="bg-red-500/5"] {
-  background-color: rgba(255, 255, 255, 0.05) !important;
-}
-html.theme-monochrome [class*="border-brand-red/"],
-html.theme-monochrome [class*="border-red-500/"] {
-  border-color: rgba(255, 255, 255, 0.2) !important;
+  border-color: #475569 !important;
 }
 
 @layer base {
   body {
-    background-color: #151518 !important;
-    background-image: 
-      linear-gradient(rgba(230, 0, 0, 0.015) 1px, transparent 1px), 
-      linear-gradient(90deg, rgba(230, 0, 0, 0.015) 1px, transparent 1px) !important;
-    background-size: 50px 50px !important;
-    background-repeat: repeat !important;
-    background-attachment: fixed !important;
-    color: #f1f5f9 !important;
+    background-color: #0D0D0F !important;
+    color: #F8FAFC !important;
     font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
   
   ::selection {
-    background-color: #e60000 !important;
+    background-color: #DC2626 !important;
     color: #FFFFFF !important;
   }
 }
 
 @layer components {
   .speedfit-logo {
-    font-family: "Anton", sans-serif;
+    font-family: "League Spartan", "Oswald", sans-serif;
     font-style: italic;
     text-transform: uppercase;
-    letter-spacing: -0.05em;
-    font-size: 2.25rem;
+    letter-spacing: -0.04em;
+    font-size: 1.85rem;
     line-height: 1.25;
     color: #FFFFFF;
     display: flex;
@@ -170,580 +84,208 @@ html.theme-monochrome [class*="border-red-500/"] {
   }
 
   .custom-scrollbar::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
+    height: 6px;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
+    background: #0D0D0F;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: #1e1e24;
+    background-color: #27272A;
     border-radius: 999px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: #e60000;
+    background-color: #DC2626;
   }
 
   .input-field {
     width: 100%;
     background-color: #141417 !important;
-    border: 1px solid #1e1e24 !important;
-    border-radius: 1rem;
-    padding: 1rem;
+    border: 1px solid #27272A !important;
+    border-radius: 0.75rem;
+    padding: 0.875rem 1rem;
     color: #FFFFFF !important;
     outline: none;
-    transition: all 0.2s ease-in-out;
+    transition: all 0.15s ease-in-out;
   }
   .input-field:focus {
-    border-color: #e60000 !important;
-    box-shadow: 0 0 10px rgba(230, 0, 0, 0.25);
-  }
-
-  /* Prevent browser autofill from turning inputs blue/white with black text on desktop */
-  .input-field:-webkit-autofill,
-  .input-field:-webkit-autofill:hover, 
-  .input-field:-webkit-autofill:focus, 
-  .input-field:-webkit-autofill:active {
-    -webkit-text-fill-color: #ffffff !important;
-    -webkit-box-shadow: 0 0 0 1000px #141417 inset !important;
-    box-shadow: 0 0 0 1000px #141417 inset !important;
-    transition: background-color 5000s ease-in-out 0s;
+    border-color: #DC2626 !important;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.25);
   }
 
   .btn-primary {
     width: 100%;
-    background-color: #e60000 !important;
+    background-color: #DC2626 !important;
     color: #FFFFFF !important;
-    font-weight: 900;
-    padding: 1.25rem;
-    border-radius: 1rem;
+    font-weight: 700;
+    padding: 0.875rem 1.5rem;
+    border-radius: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.05em;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.75rem;
-    transition: all 0.2s ease-in-out;
+    transition: all 0.15s ease-in-out;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.3);
   }
   .btn-primary:hover {
-    background-color: #b30000 !important;
+    background-color: #B91C1C !important;
     transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(220, 38, 38, 0.45);
   }
   .btn-primary:active {
     transform: scale(0.98);
   }
 }
 
-/* Global resets for Charcoal Black background, white text, and red highlights */
+/* Global resets for dark charcoal background and bright high-visibility text */
 body, html, #root {
-  background-color: #151518 !important;
-  color: #f1f5f9 !important;
+  background-color: #0D0D0F !important;
+  color: #F8FAFC !important;
 }
 
-/* Red selection colors */
-::selection {
-  background-color: #e60000 !important;
+/* Dark Theme Canvases */
+.client-red-black,
+.trainer-dark-theme,
+body:has(.trainer-dark-theme),
+body:has(.client-red-black) {
+  background-color: #0D0D0F !important;
+  color: #F8FAFC !important;
+}
+
+/* HIGH-VISIBILITY TITLES & HEADERS */
+.layout-title,
+.trainer-dark-theme h1,
+.trainer-dark-theme h2,
+.trainer-dark-theme h3,
+.trainer-dark-theme h4,
+.client-red-black h1,
+.client-red-black h2,
+.client-red-black h3,
+.client-red-black h4,
+h1, h2, h3, h4 {
+  color: #FFFFFF !important;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* HIGH-VISIBILITY CLIENT NAMES */
+.client-name,
+.trainer-dark-theme .client-name,
+.client-red-black .client-name,
+[data-client-name] {
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em;
+}
+
+/* Override any accidental dark slate text on dark backgrounds to bright white */
+.trainer-dark-theme .text-\[\#0F172A\],
+.client-red-black .text-\[\#0F172A\],
+.trainer-dark-theme .text-slate-900,
+.client-red-black .text-slate-900,
+.trainer-dark-theme .text-neutral-900,
+.client-red-black .text-neutral-900,
+.trainer-dark-theme .text-zinc-900,
+.client-red-black .text-zinc-900 {
   color: #FFFFFF !important;
 }
 
-/* Elite Red, Black, and White Theme Overrides */
-.client-red-black {
-  background-color: #151518 !important;
-  color: #f1f5f9 !important;
+/* High-contrast secondary text & metadata */
+.trainer-dark-theme .text-\[\#64748B\],
+.client-red-black .text-\[\#64748B\],
+.trainer-dark-theme .text-slate-500,
+.client-red-black .text-slate-500,
+.trainer-dark-theme .text-slate-400,
+.client-red-black .text-slate-400 {
+  color: #94A3B8 !important;
 }
 
-/* Force all white and light-grey card blocks to be sleek minimal dark matte elements */
-.client-red-black .bg-white,
-.client-red-black .bg-slate-50,
-.client-red-black .bg-slate-100,
-.client-red-black .bg-slate-200,
-.client-red-black .bg-slate-300,
-.client-red-black .bg-neutral-50,
-.client-red-black .bg-neutral-100,
-.client-red-black .bg-zinc-50,
-.client-red-black .bg-zinc-100,
-.client-red-black .bg-gray-50,
-.client-red-black .bg-gray-100,
-.client-red-black .bg-\[\#F8FAFC\],
-.client-red-black .bg-\[\#f8fafc\],
-.client-red-black .bg-\[\#F1F5F9\],
-.client-red-black .bg-\[\#f1f5f9\] {
+/* Elevated Dark Charcoal Cards */
+.trainer-dark-theme .bg-\[\#141417\],
+.trainer-dark-theme .bg-\[\#0D0D0F\],
+.trainer-dark-theme .bg-\[\#0d0d0f\],
+.trainer-dark-theme .bg-\[\#111111\],
+.trainer-dark-theme .bg-\[\#121214\],
+.trainer-dark-theme .bg-\[\#1B1B1B\],
+.client-red-black .bg-\[\#141417\],
+.client-red-black .bg-\[\#0D0D0F\],
+.client-red-black .bg-\[\#121214\] {
   background-color: #141417 !important;
-  color: #f1f5f9 !important;
-  border-color: #1e1e24 !important;
+  color: #F8FAFC !important;
+  border-color: #26262B !important;
 }
 
-/* Exclude QR code card and container so they remain clean and scannable */
-.client-red-black .bg-white.p-3,
-.client-red-black .bg-white.qr-container {
+/* Dark surfaces for dashboard cards */
+.trainer-dark-theme .bg-white:not(.qr-container):not(.no-dark-override),
+.client-red-black .bg-white:not(.qr-container):not(.no-dark-override) {
+  background-color: #141417 !important;
+  color: #F8FAFC !important;
+  border-color: #26262B !important;
+}
+
+/* QR Code styling remains high-contrast white */
+.qr-container,
+.bg-white.qr-container,
+.bg-white.p-3.qr-container {
   background-color: #FFFFFF !important;
   color: #000000 !important;
 }
 
-/* Give explicit black items dedicated priorities */
-.client-red-black .bg-black,
-.client-red-black .bg-brand-dark {
-  background-color: #151518 !important;
-}
-
-/* Override all solid black texts (used in light cards) to clean crisp white */
-.client-red-black .text-slate-900,
-.client-red-black .text-neutral-900,
-.client-red-black .text-zinc-900,
-.client-red-black .text-gray-900,
-.client-red-black .text-\[\#0F172A\],
-.client-red-black .text-\[\#0f172a\] {
-  color: #ffffff !important;
-}
-
-/* Override all light descriptions / slate values to silver-gray */
-.client-red-black .text-slate-500,
-.client-red-black .text-slate-400,
-.client-red-black .text-neutral-500,
-.client-red-black .text-zinc-500,
-.client-red-black .text-\[\#64748B\],
-.client-red-black .text-\[\#64748b\] {
-  color: #a1a1aa !important;
-}
-
-/* Redirect standard blue slate to red and white highlights */
-.client-red-black .text-blue-500,
-.client-red-black .text-blue-600,
-.client-red-black .text-indigo-500,
-.client-red-black .text-\[\#2563EB\],
-.client-red-black .text-\[\#3B82F6\] {
-  color: #e60000 !important;
-}
-
-/* Matte custom inputs and selection boxes styling */
-input, textarea, select {
-  background-color: #141417 !important;
-  border-color: #1e1e24 !important;
-  color: #ffffff !important;
-}
-
-input:focus, textarea:focus, select:focus {
-  border-color: #e60000 !important;
-  box-shadow: 0 0 10px rgba(230, 0, 0, 0.25) !important;
-}
-
-/* Border overrides */
-.client-red-black .border-slate-100,
-.client-red-black .border-slate-200,
-.client-red-black .border-slate-300,
-.client-red-black .border-neutral-200,
-.client-red-black .border-\[\#E2E8F0\],
-.client-red-black .border-\[\#e2e8f0\],
-.client-red-black .border-\[\#E4E4E5\],
-.client-red-black .border-\[\#e4e4e5\] {
-  border-color: #1e1e24 !important;
-}
-
-/* Fixed popups & dialog boxes override */
-.client-red-black div[class*="fixed"] div[class*="bg-white"],
-.client-red-black div[class*="fixed"] .bg-white {
-  background-color: #141417 !important;
-  border: 2px solid #e60000 !important;
-  color: #ffffff !important;
-}
-
-/* Scrollbar layout styling */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #151518 !important;
-}
-::-webkit-scrollbar-thumb {
-  background: #1e1e24 !important;
-  border-radius: 999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #e60000 !important;
-}
-
-/* UNIVERSAL RED, BLACK, AND WHITE DARK THEME FORCE-OVERRIDE */
-.trainer-dark-theme .no-theme-override {
-  background-color: white !important;
-  color: #0F172A !important;
-  border-color: #E2E8F0 !important;
-}
-
-.trainer-dark-theme .bg-white:not(.qr-container),
-.trainer-dark-theme .bg-slate-50,
-.trainer-dark-theme .bg-slate-100,
-.trainer-dark-theme .bg-slate-200,
-.trainer-dark-theme .bg-neutral-50,
-.trainer-dark-theme .bg-neutral-100,
-.trainer-dark-theme .bg-zinc-50,
-.trainer-dark-theme .bg-zinc-100,
-.trainer-dark-theme .bg-gray-50,
-.trainer-dark-theme .bg-gray-100,
-.trainer-dark-theme .bg-slate-500,
-.trainer-dark-theme .bg-neutral-500,
-.trainer-dark-theme .bg-zinc-500,
-.trainer-dark-theme [class*="bg-white"]:not(.qr-container),
-.trainer-dark-theme [class*="bg-slate-"],
-.trainer-dark-theme [class*="bg-neutral-"],
-.trainer-dark-theme [class*="bg-zinc-"] {
-  background-color: #141417 !important;
-  color: #f1f5f9 !important;
-  border-color: #1e1e24 !important;
-}
-
-/* Force text and labels to crisp high-contrast white */
-.trainer-dark-theme .text-\[\#0F172A\],
-.trainer-dark-theme .text-\[\#0f172a\],
-.trainer-dark-theme .text-slate-900,
-.trainer-dark-theme .text-neutral-900,
-.trainer-dark-theme .text-zinc-900,
-.trainer-dark-theme .text-gray-900,
-.trainer-dark-theme [class*="text-[#0F172A]"],
-.trainer-dark-theme [class*="text-[#0f172a]"],
-.trainer-dark-theme [class*="text-slate-900"],
-.trainer-dark-theme [class*="text-neutral-900"] {
-  color: #ffffff !important;
-}
-
-/* Force custom secondary muted colors to elegant silver */
-.trainer-dark-theme .text-\[\#64748B\],
-.trainer-dark-theme .text-\[\#64748b\],
-.trainer-dark-theme .text-slate-500,
-.trainer-dark-theme .text-slate-400,
-.trainer-dark-theme .text-neutral-500,
-.trainer-dark-theme .text-zinc-500,
-.trainer-dark-theme [class*="text-[#64748B]"],
-.trainer-dark-theme [class*="text-[#64748b]"],
-.trainer-dark-theme [class*="text-slate-500"],
-.trainer-dark-theme [class*="text-slate-400"] {
-  color: #a1a1aa !important;
-}
-
-/* Force light borders to clean dark borders */
-.trainer-dark-theme .border-\[\#E2E8F0\],
-.trainer-dark-theme .border-\[\#e2e8f0\],
+/* Hairline borders on dark canvas */
 .trainer-dark-theme .border-slate-200,
 .trainer-dark-theme .border-slate-100,
 .trainer-dark-theme .border-slate-300,
-.trainer-dark-theme .border-neutral-200,
-.trainer-dark-theme [class*="border-[#E2E8F0]"],
-.trainer-dark-theme [class*="border-slate-200"],
-.trainer-dark-theme [class*="border-slate-100"] {
-  border-color: #1e1e24 !important;
+.client-red-black .border-slate-200,
+.client-red-black .border-slate-100 {
+  border-color: #26262B !important;
 }
 
-body:has(.trainer-dark-theme), html:has(.trainer-dark-theme), #root:has(.trainer-dark-theme), .trainer-dark-theme .client-red-black {
-  background-color: #151518 !important;
-  color: #f1f5f9 !important;
+/* Dark Charcoal Inputs */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  background-color: #141417 !important;
+  border: 1px solid #27272A !important;
+  color: #FFFFFF !important;
 }
 
-/* ==========================================================================
-   TRAINER DASHBOARD RED, WHITE, CHARCOAL, BLACK PREMIUM THEME
-   ========================================================================== */
-
-/* 1. Global Page Background (Premium Charcoal Black base) */
-body:has(.trainer-dark-theme),
-.trainer-dark-theme {
-  background-color: #151518 !important;
-  color: #f8fafc !important;
+input:focus, textarea:focus, select:focus {
+  border-color: #DC2626 !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.3) !important;
 }
 
-/* Hardcoded dark utility backgrounds overridden to Charcoal Black under trainer-dark-theme */
-.trainer-dark-theme .bg-\[\#111111\],
-.trainer-dark-theme .bg-\[\#121214\],
-.trainer-dark-theme div.bg-\[\#111111\],
-.trainer-dark-theme div.bg-\[\#121214\],
-.trainer-dark-theme div[class*="bg-\[\#111111\]"],
-.trainer-dark-theme div[class*="bg-\[\#121214\]"] {
-  background-color: #151518 !important;
+/* Red brand text highlights */
+.text-brand-red,
+.client-red-black .text-brand-red,
+.trainer-dark-theme .text-brand-red {
+  color: #DC2626 !important;
 }
 
-.trainer-dark-theme .bg-\[\#111111\]\/90,
-.trainer-dark-theme header.bg-\[\#111111\]\/90 {
-  background-color: rgba(21, 21, 24, 0.9) !important;
+/* Trainer Dashboard Layout Containers */
+.trainer-dark-theme main {
+  background-color: #0D0D0F !important;
 }
 
-.trainer-dark-theme .bg-\[\#1B1B1B\],
-.trainer-dark-theme aside.bg-\[\#111111\],
-.trainer-dark-theme aside[class*="bg-\[\#111111\]"] {
-  background-color: #1b1b1f !important;
-}
-
-/* 2. Main Area (Deepest Premium Charcoal Black with fine micro-grid) */
-.trainer-dark-theme main,
-.trainer-dark-theme main.bg-\[\#111111\] {
-  background-color: #111113 !important;
-  background-image: 
-    linear-gradient(rgba(230, 0, 0, 0.015) 1px, transparent 1px), 
-    linear-gradient(90deg, rgba(230, 0, 0, 0.015) 1px, transparent 1px) !important;
-  background-size: 40px 40px !important;
-  background-repeat: repeat !important;
-}
-
-/* 3. Professional Sidebar: Solid Premium Charcoal Black, Red Right Accent Line */
 .trainer-dark-theme aside {
-  background-color: #1b1b1f !important;
-  border-right: 2px solid #e60000 !important;
+  background-color: #111114 !important;
+  border-right: 1px solid #26262B !important;
 }
 
-.trainer-dark-theme aside .p-8 {
-  border-bottom: 1px solid rgba(230, 0, 0, 0.15) !important;
-}
-
-/* Sidebar Nav Items */
 .trainer-dark-theme aside nav button {
-  color: #a1a1aa !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.1em !important;
+  color: #CBD5E1 !important;
 }
 
 .trainer-dark-theme aside nav button:hover {
-  background-color: #121214 !important;
-  color: #ffffff !important;
+  background-color: #1E1E24 !important;
+  color: #FFFFFF !important;
 }
 
-/* Active navigation item: Solid sports car Red with White text and Black left edge */
-.trainer-dark-theme aside nav button.bg-brand-red {
-  background-color: #e60000 !important;
-  color: #ffffff !important;
-  border-left: 5px solid #ffffff !important;
-  box-shadow: 0 4px 20px rgba(230, 0, 0, 0.3) !important;
-  font-weight: 900 !important;
-}
-
-/* 4. THE ATHLETIC DARKBOARDS: High-Priority Custom Charcoal Cards (Charcoal, White text, Red Border Accent) */
-.trainer-dark-theme .bg-white,
-.trainer-dark-theme .bg-white.shadow-sm,
-.trainer-dark-theme .bg-white.p-6,
-.trainer-dark-theme .bg-white.p-5,
-.trainer-dark-theme .bg-\[\#141417\],
-.trainer-dark-theme .bg-\[\#0D0D0F\],
-.trainer-dark-theme .bg-\[\#0d0d0f\] {
-  background-color: #141417 !important; /* Luxurious Dark Charcoal Card */
-  color: #ffffff !important; /* Clean White text */
-  border: 1px solid #262630 !important; /* Subtle dark border */
-  border-left: 6px solid #e60000 !important; /* Thick red bold athletic margin tag */
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.35), 0 8px 10px -6px rgba(0, 0, 0, 0.35) !important;
-  border-radius: 24px !important;
-}
-
-/* Ensure all textual elements inside cards render clean White/Silver */
-.trainer-dark-theme .bg-white h1,
-.trainer-dark-theme .bg-white h2,
-.trainer-dark-theme .bg-white h3,
-.trainer-dark-theme .bg-white h4,
-.trainer-dark-theme .bg-white h5,
-.trainer-dark-theme .bg-white p,
-.trainer-dark-theme .bg-white span,
-.trainer-dark-theme .bg-white label,
-.trainer-dark-theme .bg-white select,
-.trainer-dark-theme .bg-white option,
-.trainer-dark-theme .bg-white input,
-.trainer-dark-theme .bg-white textarea,
-.trainer-dark-theme .bg-white li,
-.trainer-dark-theme .bg-white .text-\[\#0F172A\],
-.trainer-dark-theme .bg-white .text-\[\#0f172a\],
-.trainer-dark-theme .bg-white .text-slate-900,
-.trainer-dark-theme .bg-white .text-neutral-900,
-.trainer-dark-theme .bg-white .text-zinc-900,
-.trainer-dark-theme .bg-white .text-slate-800,
-.trainer-dark-theme .bg-\[\#141417\] h1,
-.trainer-dark-theme .bg-\[\#141417\] h2,
-.trainer-dark-theme .bg-\[\#141417\] h3,
-.trainer-dark-theme .bg-\[\#141417\] h4,
-.trainer-dark-theme .bg-\[\#141417\] h5,
-.trainer-dark-theme .bg-\[\#141417\] p,
-.trainer-dark-theme .bg-\[\#141417\] span,
-.trainer-dark-theme .bg-\[\#141417\] label,
-.trainer-dark-theme .bg-\[\#141417\] select,
-.trainer-dark-theme .bg-\[\#141417\] input,
-.trainer-dark-theme .bg-\[\#141417\] textarea,
-.trainer-dark-theme .bg-\[\#141417\] li,
-.trainer-dark-theme .bg-\[\#141417\] .text-\[\#0F172A\],
-.trainer-dark-theme .bg-\[\#141417\] .text-slate-900,
-.trainer-dark-theme .bg-\[\#0D0D0F\] h1,
-.trainer-dark-theme .bg-\[\#0D0D0F\] h2,
-.trainer-dark-theme .bg-\[\#0D0D0F\] h3,
-.trainer-dark-theme .bg-\[\#0D0D0F\] h4,
-.trainer-dark-theme .bg-\[\#0D0D0F\] p,
-.trainer-dark-theme .bg-\[\#0D0D0F\] span,
-.trainer-dark-theme .bg-\[\#0D0D0F\] label {
-  color: #ffffff !important; /* Elegant high-contrast white text for dark panels */
-}
-
-/* Subheadings and labels on cards are slate gray */
-.trainer-dark-theme .bg-white p.text-neutral-400,
-.trainer-dark-theme .bg-white p.text-slate-400,
-.trainer-dark-theme .bg-white span.text-neutral-400,
-.trainer-dark-theme .bg-white .text-\[\#64748B\],
-.trainer-dark-theme .bg-white .text-\[\#64748b\],
-.trainer-dark-theme .bg-white .text-gray-400,
-.trainer-dark-theme .bg-white .text-neutral-400,
-.trainer-dark-theme .bg-white .text-\[\#A1A1AA\],
-.trainer-dark-theme .bg-white .text-\[\#a1a1aa\],
-.trainer-dark-theme .bg-\[\#141417\] p.text-neutral-400,
-.trainer-dark-theme .bg-\[\#141417\] p.text-slate-400,
-.trainer-dark-theme .bg-\[\#141417\] span.text-neutral-400,
-.trainer-dark-theme .bg-\[\#141417\] .text-gray-400,
-.trainer-dark-theme .bg-\[\#141417\] .text-neutral-400,
-.trainer-dark-theme .bg-\[\#141417\] .text-\[\#A1A1AA\],
-.trainer-dark-theme .bg-\[\#141417\] .text-\[\#a1a1aa\] {
-  color: #a1a1aa !important; /* Elegant slate grey subtext */
-}
-
-/* Background list items and detail rows inside cards should be dark charcoal grey */
-.trainer-dark-theme .bg-white .bg-slate-50,
-.trainer-dark-theme .bg-white .bg-neutral-50,
-.trainer-dark-theme .bg-white .bg-zinc-50,
-.trainer-dark-theme .bg-white .bg-gray-50,
-.trainer-dark-theme .bg-white .bg-\[\#F8FAFC\],
-.trainer-dark-theme .bg-white .bg-\[\#f8fafc\],
-.trainer-dark-theme .bg-white .bg-\[\#F1F5F9\],
-.trainer-dark-theme .bg-white .bg-\[\#f1f5f9\],
-.trainer-dark-theme .bg-white div[class*="bg-slate-50"],
-.trainer-dark-theme .bg-white div[class*="bg-slate-100"],
-.trainer-dark-theme .bg-\[\#141417\] .bg-slate-50,
-.trainer-dark-theme .bg-\[\#141417\] .bg-neutral-50,
-.trainer-dark-theme .bg-\[\#141417\] .bg-\[\#F1F5F9\],
-.trainer-dark-theme .bg-\[\#141417\] .bg-\[\#f1f5f9\],
-.trainer-dark-theme .bg-\[\#141417\] div[class*="bg-slate-50"],
-.trainer-dark-theme .bg-\[\#141417\] div[class*="bg-slate-100"],
-.trainer-dark-theme .bg-\[\#0D0D0F\] .bg-\[\#0e0e11\] {
-  background-color: #1e1e24 !important; /* Soft deep gray secondary block */
-  color: #ffffff !important;
-  border: 1px solid #2d2d39 !important;
-}
-
-/* Ensure child tags inside nested rows are also properly colored */
-.trainer-dark-theme .bg-white .bg-slate-50 *,
-.trainer-dark-theme .bg-white .bg-\[\#F1F5F9\] *,
-.trainer-dark-theme .bg-\[\#141417\] .bg-slate-50 *,
-.trainer-dark-theme .bg-\[\#141417\] .bg-\[\#F1F5F9\] * {
-  color: #ffffff !important;
-}
-
-/* Forms structure inside clean templates */
-.trainer-dark-theme .bg-white input,
-.trainer-dark-theme .bg-white select,
-.trainer-dark-theme .bg-white textarea,
-.trainer-dark-theme .bg-\[\#141417\] input,
-.trainer-dark-theme .bg-\[\#141417\] select,
-.trainer-dark-theme .bg-\[\#141417\] textarea {
-  background-color: #0d0d0f !important;
-  border: 1.5px solid #2a2a35 !important;
-  color: #ffffff !important;
-}
-
-.trainer-dark-theme .bg-white input:focus,
-.trainer-dark-theme .bg-white select:focus,
-.trainer-dark-theme .bg-white textarea:focus,
-.trainer-dark-theme .bg-\[\#141417\] input:focus,
-.trainer-dark-theme .bg-\[\#141417\] select:focus,
-.trainer-dark-theme .bg-\[\#141417\] textarea:focus {
-  border-color: #e60000 !important;
-  box-shadow: 0 0 10px rgba(230, 0, 0, 0.15) !important;
-}
-
-/* Modal overlays on the trainer panel */
-.trainer-dark-theme div[class*="fixed"] div[class*="bg-white"],
-.trainer-dark-theme div[class*="fixed"] .bg-white,
-.trainer-dark-theme div[class*="fixed"] .bg-\[\#141417\] {
-  background-color: #141417 !important;
-  border: 3px solid #e60000 !important;
-  color: #ffffff !important;
-  border-radius: 24px !important;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7) !important;
-}
-
-/* 5. THE CHARCOALS: Secondary Metrics and Background Cards */
-.trainer-dark-theme .bg-neutral-900,
-.trainer-dark-theme .bg-zinc-900,
-.trainer-dark-theme .bg-slate-900,
-.trainer-dark-theme .bg-neutral-900.border,
-.trainer-dark-theme div[class*="bg-neutral-900"] {
-  background-color: #1e1e22 !important; /* Rich Dark Charcoal background */
-  color: #ffffff !important;
-  border: 1px solid #2e2e34 !important;
-  border-left: 4px solid #e60000 !important; /* Fine details tag */
-  box-shadow: 0 6px 20px -5px rgba(0, 0, 0, 0.2) !important;
-  border-radius: 20px !important;
-}
-
-.trainer-dark-theme .bg-neutral-900 h2,
-.trainer-dark-theme .bg-neutral-900 h3,
-.trainer-dark-theme .bg-neutral-900 h4,
-.trainer-dark-theme .bg-neutral-900 p,
-.trainer-dark-theme .bg-neutral-900 span {
-  color: #ffffff !important;
-}
-
-.trainer-dark-theme .bg-neutral-900 .text-neutral-400 {
-  color: #a1a1aa !important;
-}
-
-/* Special High-Power Laser Red numbers inside charcoal cards */
-.trainer-dark-theme .bg-neutral-900 .text-brand-red,
-.trainer-dark-theme .text-brand-red {
-  color: #e60000 !important;
-}
-
-/* 6. RED ACCENTS: Vibrant primary triggers */
-.trainer-dark-theme .text-rose-500 {
-  color: #f43f5e !important;
-}
-
-.trainer-dark-theme .border-brand-red {
-  border-color: #e60000 !important;
-}
-
-/* Primary athletic action buttons */
-.trainer-dark-theme button.bg-brand-red,
-.trainer-dark-theme button.bg-rose-500,
-.trainer-dark-theme button.bg-red-600,
-.trainer-dark-theme .btn-primary {
-  background-color: #e60000 !important;
-  color: #ffffff !important;
-  border: none !important;
-  font-weight: 800 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.08em !important;
-}
-
-.trainer-dark-theme button.bg-brand-red:hover,
-.trainer-dark-theme button.bg-rose-500:hover,
-.trainer-dark-theme button.bg-red-600:hover,
-.trainer-dark-theme .btn-primary:hover {
-  background-color: #cc0000 !important;
-  transform: translateY(-1.5px) !important;
-  box-shadow: 0 8px 24px rgba(230, 0, 0, 0.35) !important;
-}
-
-.trainer-dark-theme button.bg-brand-red:active,
-.trainer-dark-theme button.bg-rose-500:active,
-.trainer-dark-theme button.bg-red-600:active,
-.trainer-dark-theme .btn-primary:active {
-  transform: scale(0.96) !important;
-}
-
-/* Special Switch/Selector components inside clean templates */
-.trainer-dark-theme .bg-\[\#F1F5F9\],
-.trainer-dark-theme .bg-\[\#f1f5f9\],
-.trainer-dark-theme .bg-\[\#F1F5F9\].p-0\.5,
-.trainer-dark-theme .bg-\[\#f1f5f9\].p-0\.5 {
-  background-color: #f4f4f5 !important;
-  border: 1px solid #e4e4e7 !important;
-  border-radius: 10px !important;
-}
-
-.trainer-dark-theme .bg-\[\#F1F5F9\] button,
-.trainer-dark-theme .bg-\[\#f1f5f9\] button {
-  color: #71717a !important;
-}
-
-.trainer-dark-theme .bg-\[\#F1F5F9\] button.bg-white,
-.trainer-dark-theme .bg-\[\#f1f5f9\] button.bg-white {
-  background-color: #ffffff !important;
-  color: #1a1a1e !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
-  border-radius: 8px !important;
+.trainer-dark-theme aside nav button.bg-brand-red,
+.trainer-dark-theme aside nav button.active-nav-tab {
+  background-color: #DC2626 !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.3) !important;
+  font-weight: 700 !important;
 }

@@ -183,18 +183,18 @@ export const ClientRoster: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 border-b border-zinc-900 pb-6">
         <div>
           <span className="text-[10px] bg-red-600/10 text-red-500 font-mono py-1 px-3 rounded-full uppercase tracking-widest border border-red-500/20">
-            Coach Operations Panel
+            Clients Management
           </span>
-          <h1 className="text-4xl md:text-5xl font-display font-extrabold text-white mt-1 uppercase tracking-tight">
-            ATHLETE <span className="text-[#FF0000]">ROSTER</span>
+          <h1 className="text-3xl md:text-4xl font-display font-extrabold text-white mt-1 uppercase tracking-tight">
+            CLIENT <span className="text-[#FF0000]">ROSTER</span>
           </h1>
           <p className="text-zinc-400 text-xs mt-1 font-mono">
-            Manage your high-performance clients, track plans, and oversee active subscription statuses.
+            Manage your clients, track training plans, and oversee active subscription statuses.
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs font-mono text-zinc-500">
           <span className="w-2.5 h-2.5 bg-green-500 rounded-full animate-ping"></span>
-          <span>Roster Live-Synced</span>
+          <span>Roster live-synced</span>
         </div>
       </div>
 
@@ -326,7 +326,7 @@ export const ClientRoster: React.FC = () => {
           {/* Status filter row */}
           <div className="space-y-2">
             <label className="text-[10px] uppercase font-mono tracking-wider text-zinc-500 block">
-              Filter by Athlete Status
+              Filter by client status
             </label>
             <div className="flex flex-wrap gap-2">
               {["All", "Active", "Paused", "Inactive"].map((status) => (
@@ -599,7 +599,7 @@ export const ClientRoster: React.FC = () => {
                   {/* Complete Bio Information panel */}
                   <div className="space-y-4">
                     <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 border-b border-zinc-900 pb-2 flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-red-500" /> Athlete Credentials
+                      <User className="w-3.5 h-3.5 text-red-500" /> Client credentials
                     </h3>
 
                     <div className="space-y-3 font-mono text-xs">
@@ -625,7 +625,7 @@ export const ClientRoster: React.FC = () => {
 
                       {/* Id Entry */}
                       <div className="flex items-center justify-between py-1 border-b border-zinc-900/30">
-                        <span className="text-zinc-500">Athlete System ID</span>
+                        <span className="text-zinc-500">Client ID</span>
                         <span className="text-zinc-400 uppercase text-[9px] font-mono break-all">{selectedClient.id}</span>
                       </div>
                     </div>
@@ -679,7 +679,7 @@ export const ClientRoster: React.FC = () => {
                   href={`mailto:${selectedClient.email}?subject=SpeedFit Coaching Session`}
                   className="flex-1 bg-red-650 hover:bg-red-700 active:scale-95 text-xs text-white text-center font-bold uppercase py-3 rounded-xl flex items-center justify-center gap-1.5 tracking-wider transition-all"
                 >
-                  <Mail className="w-4 h-4" /> Message Athlete
+                  <Mail className="w-4 h-4" /> Message client
                 </a>
                 <button
                   type="button"

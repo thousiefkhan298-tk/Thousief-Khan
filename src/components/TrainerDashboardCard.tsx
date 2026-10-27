@@ -8,18 +8,26 @@ interface Props {
   icon?: React.ReactNode;
   className?: string;
   trend?: string;
+  onClick?: () => void;
 }
 
-export const TrainerDashboardCard = ({ title, value, icon, className, trend }: Props) => {
+export const TrainerDashboardCard = ({ title, value, icon, className, trend, onClick }: Props) => {
   return (
-    <Card className={cn("rounded-2xl border-[#2A2A2A] bg-[#1F1F1F] text-white shadow-md", className)}>
+    <Card 
+      onClick={onClick}
+      className={cn(
+        "rounded-2xl border-[#26262B] bg-[#141417] text-white shadow-sm transition-all", 
+        onClick && "cursor-pointer hover:border-[#DC2626]/60 hover:bg-[#1A1A20] active:scale-[0.98]",
+        className
+      )}
+    >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-gray-400">{title}</CardTitle>
+        <CardTitle className="text-xs font-mono font-bold tracking-wider text-slate-400 uppercase">{title}</CardTitle>
         {icon}
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold text-white">{value}</div>
-        {trend && <p className="text-xs text-gray-400 mt-1">{trend}</p>}
+        <div className="text-2xl font-bold text-white tabular-nums font-display tracking-tight">{value}</div>
+        {trend && <p className="text-xs text-slate-400 mt-1 font-mono">{trend}</p>}
       </CardContent>
     </Card>
   );

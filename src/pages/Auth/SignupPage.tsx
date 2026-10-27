@@ -1,9 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { createUserWithEmailAndPassword, sendEmailVerification, signOut } from 'firebase/auth';
-import { doc, setDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { 
+  createUserWithEmailAndPassword, 
+  sendEmailVerification, 
+  signOut,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult
+} from 'firebase/auth';
 import { claimPlaceholderAccount } from '../../services/accountLinking';
-import { auth, db, handleFirestoreError, OperationType } from '../../firebase';
+import { auth, handleFirestoreError, OperationType } from '../../firebase';
 import { ArrowRight, Zap, ShieldAlert } from 'lucide-react';
 
 const SignupPage: React.FC = () => {
@@ -25,6 +32,97 @@ const SignupPage: React.FC = () => {
 
   const TRAINER_EMAIL = 'thousiefkhan298@gmail.com';
   const SECONDARY_TRAINER_EMAIL = 'speedfit029@gmail.com';
+
+  // Handle redirect sign-in results (PWA standalone mode / mobile browser redirect)
+  useEffect(() => {
+    let isMounted = true;
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (!result || !result.user || !isMounted) return;
+        setLoading(true);
+        const googleUser = result.user;
+        const googleEmail = googleUser.email?.toLowerCase().trim();
+
+        if (googleEmail) {
+          await claimPlaceholderAccount(googleUser.uid, googleEmail, {
+            name: googleUser.displayName || googleEmail.split('@')[0],
+            trainerId: trainerIdFromUrl || null,
+            googleLinked: true,
+          });
+        }
+
+        navigate('/dashboard');
+      })
+      .catch((err: any) => {
+        if (isMounted) {
+          handleGoogleAuthError(err);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [navigate, trainerIdFromUrl]);
+
+  const handleGoogleAuthError = (err: any) => {
+    if (['auth/popup-closed-by-user', 'auth/cancelled-popup-request'].includes(err.code)) {
+      return;
+    }
+    console.warn("Google Auth Warning on Signup:", err.code || err.message);
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : 'this site';
+    if (err.code === 'auth/popup-blocked') {
+      setError('Google sign-in popup was blocked. Please enable popups or use email registration.');
+    } else if (err.code === 'auth/unauthorized-domain') {
+      setError(`Google sign-in is not authorized for "${hostname}". Ask the app owner to add "${hostname}" to Firebase Console > Authentication > Settings > Authorized Domains.`);
+    } else if (err.code === 'auth/network-request-failed') {
+      setError('Network connection failed. Please check your internet connection and retry.');
+    } else {
+      setError('Google sign-up failed: ' + (err.message || 'Please try again.'));
+    }
+  };
+
+  const handleGoogleSignup = async () => {
+    setError('');
+    setLoading(true);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    const isStandalone = typeof window !== 'undefined' && (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true ||
+      document.referrer.includes('android-app://')
+    );
+
+    try {
+      let googleUser: any = null;
+      try {
+        const result = await signInWithPopup(auth, provider);
+        googleUser = result.user;
+      } catch (popupErr: any) {
+        if (['auth/popup-blocked', 'auth/cancelled-popup-request'].includes(popupErr.code) || isStandalone) {
+          console.log("Popup blocked on signup, using redirect...");
+          await signInWithRedirect(auth, provider);
+          return;
+        }
+        throw popupErr;
+      }
+
+      const googleEmail = googleUser?.email?.toLowerCase().trim();
+      if (googleEmail) {
+        await claimPlaceholderAccount(googleUser.uid, googleEmail, {
+          name: googleUser.displayName || googleEmail.split('@')[0],
+          trainerId: trainerIdFromUrl || null,
+          googleLinked: true,
+        });
+      }
+
+      navigate('/dashboard');
+    } catch (err: any) {
+      handleGoogleAuthError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -228,59 +326,78 @@ const SignupPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <form onSubmit={handleEmailSignup} className="space-y-6 mb-6">
-              <div className="relative">
-                <label className="block text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA] font-bold mb-3 ml-1">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  className="input-field"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="John Doe"
-                />
+            <>
+              <div className="mb-6">
+                <button
+                  type="button"
+                  onClick={handleGoogleSignup}
+                  disabled={loading}
+                  className="w-full py-4 bg-white text-neutral-900 font-bold rounded-2xl hover:bg-neutral-200 transition-all text-[10px] font-mono uppercase tracking-[0.15em] flex items-center justify-center gap-2"
+                >
+                  Sign up with Google
+                </button>
               </div>
 
-              <div className="relative">
-                <label className="block text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA] font-bold mb-3 ml-1">Identity (Email)</label>
-                <input
-                  type="email"
-                  required
-                  className="input-field"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="athlete@speedfit.com"
-                />
+              <div className="relative flex py-4 items-center mb-6">
+                <div className="flex-grow border-t border-[#2A2A2A]"></div>
+                <span className="flex-shrink-0 mx-4 text-white font-bold text-[9px] font-mono uppercase tracking-widest">Or Email</span>
+                <div className="flex-grow border-t border-[#2A2A2A]"></div>
               </div>
 
-              <div className="relative">
-                <label className="block text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA] font-bold mb-3 ml-1">Secret (Password)</label>
-                <input
-                  type="password"
-                  required
-                  className="input-field"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                />
-              </div>
+              <form onSubmit={handleEmailSignup} className="space-y-5 mb-6">
+                <div className="relative">
+                  <label className="block text-xs font-medium text-gray-300 mb-2 ml-1">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    className="input-field min-h-[44px] focus-visible:ring-2 focus-visible:ring-[#E10600] focus:outline-none"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Full name"
+                  />
+                </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn-primary group mt-4 w-full"
-              >
-                <span>{loading ? 'Processing...' : 'Sign up with Email'}</span>
-                {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
-              </button>
-            </form>
+                <div className="relative">
+                  <label className="block text-xs font-medium text-gray-300 mb-2 ml-1">Email address</label>
+                  <input
+                    type="email"
+                    required
+                    className="input-field min-h-[44px] focus-visible:ring-2 focus-visible:ring-[#E10600] focus:outline-none"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="client@example.com"
+                  />
+                </div>
+
+                <div className="relative">
+                  <label className="block text-xs font-medium text-gray-300 mb-2 ml-1">Password</label>
+                  <input
+                    type="password"
+                    required
+                    className="input-field min-h-[44px] focus-visible:ring-2 focus-visible:ring-[#E10600] focus:outline-none"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Create a strong password"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="btn-primary group mt-4 w-full min-h-[48px] flex items-center justify-center gap-2 focus-visible:ring-2 focus-visible:ring-white focus:outline-none"
+                >
+                  <span>{loading ? 'Creating account...' : 'Create account with email'}</span>
+                  {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
+                </button>
+              </form>
+            </>
           )}
 
-          <div className="mt-10 pt-8 border-t border-[#2A2A2A] text-center">
-            <p className="text-white font-bold text-xs font-mono uppercase tracking-wider">
-              Already Registered?{' '}
-              <Link to="/login" className="text-brand-red font-bold hover:text-red-400 transition-colors">
-                Access Portal
+          <div className="mt-8 pt-6 border-t border-[#2A2A2A] text-center">
+            <p className="text-white text-sm">
+              Already have an account?{' '}
+              <Link to="/login" className="text-brand-red font-semibold hover:text-red-400 transition-colors inline-block min-h-[44px] py-2.5 px-1">
+                Sign in
               </Link>
             </p>
           </div>

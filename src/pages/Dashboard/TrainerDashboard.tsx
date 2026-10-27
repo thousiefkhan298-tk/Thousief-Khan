@@ -43,7 +43,8 @@ import {
   Info,
   Clock,
   Sparkles,
-  Copy
+  Copy,
+  Flame
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase.js';
@@ -55,6 +56,7 @@ import { COMMON_EXERCISES } from '../../constants.js';
 import { downloadClientReport, exportPaidClientsReport, exportAllInvoicesReport, exportPaymentReceiptToPDF, exportAllClientsBookletToPDF, exportAttendanceReportToPDF } from '../../utils/pdfExporter.js';
 import { isGmailAuthorized, authorizeGmail, sendGmailEmail, clearGmailAuthorization } from '../../services/gmailService.js';
 import { GoogleCalendarIntegration } from '../../components/GoogleCalendarIntegration.js';
+import TrainerLeadsView from './trainer/TrainerLeadsView';
 
 
 // Helper functions for payment sums
@@ -94,6 +96,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
   const [sessions, setSessions] = useState<any[]>([]);
   const [allDrafts, setAllDrafts] = useState<any[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+  const [leads, setLeads] = useState<any[]>([]);
 
   // Page filter / interface states
   const [searchQuery, setSearchQuery] = useState('');
@@ -194,6 +197,25 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
       setTestimonials(data);
     });
 
+    let isLeadsActive = true;
+    const fetchTrainerLeads = async () => {
+      try {
+        const headers: Record<string, string> = {
+          'X-User-Role': 'TRAINER',
+          'X-User-Email': userData?.email || 'thousiefkhan298@gmail.com'
+        };
+        const res = await fetch('/api/leads', { headers });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.leads) && isLeadsActive) {
+            setLeads(json.leads);
+          }
+        }
+      } catch {}
+    };
+    fetchTrainerLeads();
+    const leadsInterval = setInterval(fetchTrainerLeads, 30000);
+
     const timeout = setTimeout(() => {
       setLoading(false);
     }, 800);
@@ -204,6 +226,8 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
       unsubscribeSessions();
       unsubscribeDrafts();
       unsubscribeTestimonials();
+      isLeadsActive = false;
+      clearInterval(leadsInterval);
       clearTimeout(timeout);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -391,8 +415,20 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
       }
     });
 
+    // New Lead Submissions Alert
+    leads.filter(l => l.status === 'New').forEach(l => {
+      const hasFlags = Array.isArray(l.healthFlags) && l.healthFlags.length > 0;
+      list.push({
+        id: `lead_${l.id}`,
+        type: 'message',
+        title: hasFlags ? 'New Lead (Health Flags Flagged)' : 'New Lead Assessment',
+        message: `${l.contact?.name || 'Recruit'} submitted an assessment for ${l.goals?.primaryGoal || 'transformation'}.${hasFlags ? ` ⚠️ ${l.healthFlags.length} Health Flag(s) flagged.` : ''}`,
+        date: l.createdAt ? new Date(l.createdAt).getTime() : Date.now()
+      });
+    });
+
     setAlerts(list);
-  }, [clients, recentLogs, paymentRecords]);
+  }, [clients, recentLogs, paymentRecords, leads]);
 
   // Recharts Client Flow & Monthly Attendance calculations
   const monthlyData = useMemo(() => {
@@ -834,25 +870,25 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
   return (
     <AppLayout>
-      <div className="space-y-8 pb-10 trainer-dark-theme bg-[#121214] text-white">
+      <div className="space-y-8 pb-10 trainer-dark-theme bg-[#0D0D0F] text-[#F8FAFC]">
         
         {/* HEADER SECTION */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#2A2A2A] pb-5">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#26262B] pb-5">
           <div>
-            <div className="flex items-center space-x-1.5 mb-1.5 text-[#E10600] font-mono text-[10px] uppercase tracking-widest font-bold">
-            <span className="w-1.5 h-1.5 bg-brand-red rounded-full animate-pulse"></span>
-            <span>Coach Command Center</span>
+            <div className="flex items-center space-x-1.5 mb-1.5 text-brand-red font-mono text-[10px] uppercase tracking-widest font-bold">
+            <span className="w-1.5 h-1.5 bg-brand-red rounded-full"></span>
+            <span>Trainer Workspace</span>
           </div>
           <h1 className="text-3xl font-display font-bold italic uppercase tracking-tight text-white">
             Speed Fit <span className="text-brand-red">Dashboard</span>
           </h1>
-          <p className="text-xs font-mono text-[#A1A1AA] uppercase tracking-widest mt-1">
-            Welcome, {userData?.name || 'Chief Coach'}. Controlling {clients.length} premium transformation profiles.
+          <p className="text-xs font-mono text-slate-400 uppercase tracking-widest mt-1">
+            Welcome, {userData?.name || 'Coach'}. Managing {clients.length} client accounts.
           </p>
           {userData?.uid && (
             <div className="flex items-center space-x-2 mt-2.5">
-              <span className="text-[11px] font-mono text-neutral-300 bg-neutral-900 border border-neutral-800 px-3 py-1.5 rounded-lg flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="text-[11px] font-mono text-slate-300 bg-[#141417] border border-[#26262B] px-3 py-1.5 rounded-lg flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                 <span className="text-brand-red font-bold">Trainer ID:</span> 
                 <code className="text-white font-mono select-all font-semibold">{userData.uid}</code>
               </span>
@@ -861,8 +897,9 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   navigator.clipboard.writeText(userData.uid);
                   alert(`Trainer ID copied to clipboard: ${userData.uid}`);
                 }}
-                className="text-[10px] font-mono text-white bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                className="text-[10px] font-mono text-slate-300 bg-[#18181C] hover:bg-[#222228] border border-[#26262B] px-3 py-2 min-h-[44px] rounded-lg transition-colors flex items-center gap-1.5 active:scale-95 cursor-pointer"
                 title="Copy Trainer ID"
+                aria-label="Copy Trainer ID"
               >
                 <Copy className="w-3 h-3 text-brand-red" /> Copy ID
               </button>
@@ -872,15 +909,16 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
         <div className="flex items-center space-x-3.5">
           <button 
             onClick={() => setShowNotifications(!showNotifications)} 
-            className="p-3 bg-neutral-900 border border-neutral-800 text-white rounded-xl relative transition-all active:scale-95"
+            aria-label="View system alerts"
+            className="p-3 min-h-[44px] min-w-[44px] flex items-center justify-center bg-[#18181C] border border-[#26262B] text-slate-300 hover:text-white rounded-xl relative transition-all active:scale-95 cursor-pointer shadow-sm"
           >
             <Bell className="w-4 h-4 text-brand-red" />
             {alerts.length > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-brand-red rounded-full border-2 border-black animate-pulse"></span>
+              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-brand-red rounded-full border-2 border-[#18181C]"></span>
             )}
           </button>
-          <div className="bg-neutral-900 border border-neutral-800 px-4 py-2.5 rounded-xl text-right min-w-[120px]">
-            <p className="text-[8px] font-mono text-[#A1A1AA] font-bold uppercase tracking-widest">SYSTEM CLOCK</p>
+          <div className="bg-[#18181C] border border-[#26262B] px-4 py-2.5 rounded-xl text-right min-w-[120px] shadow-sm">
+            <p className="text-[8px] font-mono text-slate-400 font-bold uppercase tracking-widest">SYSTEM CLOCK</p>
             <p className="text-sm font-semibold text-white font-mono">
               {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
             </p>
@@ -892,30 +930,40 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
       {currentTab === 'dashboard' && (
         <div className="space-y-8">
           {/* Main counts Board */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <TrainerDashboardCard 
-              title="ACTIVE ATHLETES" 
+              title="ACTIVE CLIENTS" 
               value={clients.filter(c => c.isActive !== false).length}
-              trend="Onboarding pipeline stable"
+              trend="Client accounts active"
               icon={<Users className="w-5 h-5 text-red-500" />}
+              onClick={() => navigate('/dashboard?tab=clients')}
             />
             <TrainerDashboardCard 
-              title="SYSTEM WARNINGS" 
+              title="LEADS PIPELINE" 
+              value={leads.length}
+              trend={`${leads.filter(l => l.status === 'New').length} new assessment(s)`}
+              icon={<Flame className="w-5 h-5 text-amber-500" />}
+              onClick={() => navigate('/dashboard?tab=leads')}
+            />
+            <TrainerDashboardCard 
+              title="SYSTEM ALERTS" 
               value={alerts.length}
-              trend="Requiring immediate attention"
+              trend="Requiring attention"
               icon={<AlertTriangle className="w-5 h-5 text-red-500" />}
             />
             <TrainerDashboardCard 
               title="PENDING SESSIONS" 
               value={sessions.filter(s => s.status === 'PENDING' || s.status === 'Pending').length}
-              trend="Upcoming calendar bookings"
+              trend="Upcoming session bookings"
               icon={<Calendar className="w-5 h-5 text-emerald-500" />}
+              onClick={() => navigate('/dashboard?tab=calendar')}
             />
             <TrainerDashboardCard 
-              title="AI DRAFTS WAITING" 
+              title="PENDING DRAFTS" 
               value={allDrafts.length}
-              trend="VALIDATION MANDATORY ✓"
+              trend="Awaiting review"
               icon={<Sparkles className="w-5 h-5 text-amber-500" />}
+              onClick={() => navigate('/dashboard?tab=drafts')}
             />
           </div>
 
@@ -925,7 +973,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             <div className="lg:col-span-2 bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6">
               <div className="flex justify-between items-center border-b border-[#262630] pb-3">
                 <div>
-                  <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">DAILY CHECK-IN LOGS</h3>
+                  <h3 className="text-lg font-bold text-white font-display uppercase tracking-wider">DAILY CHECK-IN LOGS</h3>
                   <p className="text-xs text-[#64748B] font-mono">Roll-call checklist for high physical accountability.</p>
                 </div>
                 <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-600 font-bold px-3 py-1 rounded">
@@ -944,7 +992,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     return (
                       <div key={client.id} className="p-3.5 border border-[#262630] rounded-xl flex items-center justify-between bg-[#0D0D0F]">
                         <div>
-                          <p className="text-xs font-bold text-[#0F172A] uppercase">{client.name}</p>
+                          <p className="text-xs font-bold text-white uppercase">{client.name}</p>
                           <p className="text-[9px] font-mono text-[#64748B] mt-0.5">{client.email}</p>
                         </div>
                         <div className="flex items-center space-x-2">
@@ -982,7 +1030,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#262630] pb-3">
                 <div>
-                  <h3 className="text-sm font-bold text-[#0F172A] font-mono uppercase tracking-wider">
+                  <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider">
                     {chartType === 'clientFlow' ? 'Client Flow' : 'Monthly Attendance'}
                   </h3>
                   <p className="text-[10px] text-[#64748B] font-mono uppercase">
@@ -1098,7 +1146,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           </div>
                           <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-600 font-bold px-2 py-0.5 rounded">ACTIVE</span>
                         </div>
-                        <p className="text-sm font-bold text-[#0F172A] uppercase tracking-wide group-hover:text-brand-red transition-colors">{client.name}</p>
+                        <p className="text-sm font-bold text-white uppercase tracking-wide group-hover:text-brand-red transition-colors">{client.name}</p>
                         <p className="text-[10px] font-mono text-[#64748B] truncate">{client.email}</p>
                       </div>
 
@@ -1200,7 +1248,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               </div>
               <div>
                 <p className="text-[10px] font-mono text-[#64748B] uppercase tracking-wider font-bold">Attendance Rate</p>
-                <h4 className="text-xl font-bold text-[#0F172A] tracking-tight">{overallAttendanceMetrics.rate}%</h4>
+                <h4 className="text-xl font-bold text-white tracking-tight">{overallAttendanceMetrics.rate}%</h4>
                 <p className="text-[9px] font-mono text-emerald-500 mt-0.5">Average overall records</p>
               </div>
             </div>
@@ -1211,7 +1259,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               </div>
               <div>
                 <p className="text-[10px] font-mono text-[#64748B] uppercase tracking-wider font-bold">Total Present Marks</p>
-                <h4 className="text-xl font-bold text-[#0F172A] tracking-tight">{overallAttendanceMetrics.presentCount} Logs</h4>
+                <h4 className="text-xl font-bold text-white tracking-tight">{overallAttendanceMetrics.presentCount} Logs</h4>
                 <p className="text-[9px] font-mono text-[#64748B] mt-0.5">{overallAttendanceMetrics.total} registrations total</p>
               </div>
             </div>
@@ -1222,7 +1270,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               </div>
               <div>
                 <p className="text-[10px] font-mono text-[#64748B] uppercase tracking-wider font-bold">Today's Checkins</p>
-                <h4 className="text-xl font-bold text-[#0F172A] tracking-tight">{overallAttendanceMetrics.todayPresentCount} / {overallAttendanceMetrics.activeClientsCount}</h4>
+                <h4 className="text-xl font-bold text-white tracking-tight">{overallAttendanceMetrics.todayPresentCount} / {overallAttendanceMetrics.activeClientsCount}</h4>
                 <p className="text-[9px] font-mono text-[#64748B] mt-0.5">{overallAttendanceMetrics.todayLogged} logged in database</p>
               </div>
             </div>
@@ -1233,7 +1281,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               </div>
               <div className="min-w-0">
                 <p className="text-[10px] font-mono text-[#64748B] uppercase tracking-wider font-bold">Most Consistent Client</p>
-                <h4 className="text-sm font-bold text-[#0F172A] truncate tracking-tight">{overallAttendanceMetrics.bestClientName}</h4>
+                <h4 className="text-sm font-bold text-white truncate tracking-tight">{overallAttendanceMetrics.bestClientName}</h4>
                 <p className="text-[9px] font-mono text-brand-red mt-0.5 truncate">Highest attendance count</p>
               </div>
             </div>
@@ -1244,22 +1292,22 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm lg:col-span-7 space-y-4">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 pb-2 border-b border-[#262630]">
                 <div>
-                  <h3 className="text-xs font-bold text-[#0F172A] font-mono uppercase tracking-wider">Attendance Calendar</h3>
+                  <h3 className="text-xs font-bold text-white font-mono uppercase tracking-wider">Attendance Calendar</h3>
                   <p className="text-[10px] text-[#64748B] font-mono">Select a grid segment to display log entries.</p>
                 </div>
                 <div className="flex items-center space-x-1">
                   <button 
                     onClick={() => setSelectedCalendarDate(new Date(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth() - 1, 1))}
-                    className="p-1.5 border border-[#262630] hover:bg-[#0D0D0F] rounded-lg text-[#0F172A] cursor-pointer"
+                    className="p-1.5 border border-[#262630] hover:bg-[#0D0D0F] rounded-lg text-white cursor-pointer"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
-                  <span className="font-mono text-xs font-bold uppercase tracking-wider px-2 text-[#0F172A] min-w-[120px] text-center">
+                  <span className="font-mono text-xs font-bold uppercase tracking-wider px-2 text-white min-w-[120px] text-center">
                     {format(selectedCalendarDate, 'MMMM yyyy')}
                   </span>
                   <button 
                     onClick={() => setSelectedCalendarDate(new Date(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth() + 1, 1))}
-                    className="p-1.5 border border-[#262630] hover:bg-[#0D0D0F] rounded-lg text-[#0F172A] cursor-pointer"
+                    className="p-1.5 border border-[#262630] hover:bg-[#0D0D0F] rounded-lg text-white cursor-pointer"
                   >
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
@@ -1268,7 +1316,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       setSelectedCalendarDate(new Date());
                       setFocusedDate(format(new Date(), 'yyyy-MM-dd'));
                     }}
-                    className="ml-2 px-2.5 py-1.5 border border-[#262630] hover:bg-[#0D0D0F] rounded-lg text-[9px] font-mono font-bold uppercase text-[#0F172A] cursor-pointer"
+                    className="ml-2 px-2.5 py-1.5 border border-[#262630] hover:bg-[#0D0D0F] rounded-lg text-[9px] font-mono font-bold uppercase text-white cursor-pointer"
                   >
                     Today
                   </button>
@@ -1312,7 +1360,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     >
                       <div className="flex justify-between items-center w-full">
                         <span className={`text-[10px] font-mono font-bold ${
-                          isTodayItem ? 'bg-brand-red text-white px-1.5 py-0.5 rounded font-extrabold' : 'text-[#0F172A]'
+                          isTodayItem ? 'bg-brand-red text-white px-1.5 py-0.5 rounded font-extrabold' : 'text-white'
                         }`}>
                           {dateItem.getDate()}
                         </span>
@@ -1351,7 +1399,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               <div className="space-y-4">
                 <div className="flex justify-between items-start border-b border-[#262630] pb-3">
                   <div>
-                    <h3 className="text-sm font-bold text-[#0F172A] font-mono uppercase tracking-wider">
+                    <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider">
                       Roster Registry
                     </h3>
                     <p className="text-[10px] text-brand-red font-mono font-bold">
@@ -1370,7 +1418,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           setSelectedCalendarDate(new Date(e.target.value));
                         }
                       }}
-                      className="border border-[#262630] text-[10px] font-mono font-bold uppercase rounded-lg px-2 py-1 text-[#0F172A] focus:outline-none focus:border-brand-red"
+                      className="border border-[#262630] text-[10px] font-mono font-bold uppercase rounded-lg px-2 py-1 text-white focus:outline-none focus:border-brand-red"
                     />
                   </div>
                 </div>
@@ -1383,7 +1431,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     placeholder="Search recruits..."
                     value={attendanceFilterQuery}
                     onChange={(e) => setAttendanceFilterQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-1.5 border border-[#262630] rounded-xl text-[10px] font-mono outline-none focus:border-brand-red/45 text-[#0F172A]"
+                    className="w-full pl-9 pr-3 py-1.5 border border-[#262630] rounded-xl text-[10px] font-mono outline-none focus:border-brand-red/45 text-white"
                   />
                 </div>
 
@@ -1404,7 +1452,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       return (
                         <div key={client.id} className="p-3 border border-[#262630] bg-[#0D0D0F]/60 rounded-xl flex items-center justify-between group hover:bg-[#141417] transition-all">
                           <div className="min-w-0 flex-1 mr-3">
-                            <p className="text-[11px] font-bold text-[#0F172A] uppercase truncate">{client.name}</p>
+                            <p className="text-[11px] font-bold text-white uppercase truncate">{client.name}</p>
                             <div className="text-[9px] font-mono text-[#64748B] truncate mt-0.5">
                               {dayRecord ? (
                                 <span className={isPresent ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
@@ -1423,7 +1471,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                                   placeholder="e.g. 09:00 AM" 
                                   value={dayRecord.timing || ''} 
                                   onChange={(e) => handleUpdateTiming(dayRecord.id, e.target.value)}
-                                  className="w-20 px-1 py-0.5 border border-slate-250 focus:border-brand-red rounded font-mono text-[9px] outline-none bg-[#141417] font-bold text-[#0F172A]"
+                                  className="w-20 px-1 py-0.5 border border-slate-250 focus:border-brand-red rounded font-mono text-[9px] outline-none bg-[#141417] font-bold text-white"
                                 />
                               </div>
                             )}
@@ -1496,7 +1544,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
-                <h3 className="text-sm font-bold text-[#0F172A] font-mono uppercase tracking-wider">Live Check-in Ledger</h3>
+                <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider">Live Check-in Ledger</h3>
                 <p className="text-[10px] text-[#64748B] font-mono">Stream containing the latest recorded attendance marks across all clients.</p>
               </div>
               <div className="relative">
@@ -1506,7 +1554,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   placeholder="Filter by athlete name..."
                   value={attendanceHistoryQuery}
                   onChange={(e) => setAttendanceHistoryQuery(e.target.value)}
-                  className="pl-9 pr-3 py-1.5 border border-[#262630] rounded-xl text-[10px] font-mono outline-none focus:border-brand-red/40 text-[#0F172A]"
+                  className="pl-9 pr-3 py-1.5 border border-[#262630] rounded-xl text-[10px] font-mono outline-none focus:border-brand-red/40 text-white"
                 />
               </div>
             </div>
@@ -1580,7 +1628,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           ) : (
             <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6">
               <div>
-                <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">PENDING REVIEW SYSTEM QUEUE</h3>
+                <h3 className="text-lg font-bold text-white font-display uppercase tracking-wider">PENDING REVIEW SYSTEM QUEUE</h3>
                 <p className="text-xs text-[#64748B] font-mono">Requires human certified coach validation before launching workout & nutrition plans.</p>
               </div>
 
@@ -1597,7 +1645,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     return (
                       <div key={draft.id} className="p-4 border border-[#262630] rounded-xl flex items-center justify-between bg-[#0D0D0F] font-mono text-xs">
                         <div>
-                          <p className="font-bold text-[#0F172A] uppercase">{recruitObj?.name || 'Recruit Blueprint'}</p>
+                          <p className="font-bold text-white uppercase">{recruitObj?.name || 'Recruit Blueprint'}</p>
                           <p className="text-[10px] text-[#64748B] mt-0.5">Calories target: {draft.dietPlan?.calories} kcal / Protein: {draft.dietPlan?.protein}g</p>
                         </div>
                         <button 
@@ -1619,7 +1667,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
       )}
 
       {/* 5. WORKOUTS (PROGRAM INDEX) TAB */}
-      {currentTab === 'workouts' && (
+      {(currentTab === 'workouts' || currentTab === 'plans') && (
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1627,7 +1675,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6"
         >
           <div>
-            <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">PRESET ACTIVE WORKOUT SCHEMES</h3>
+            <h3 className="text-lg font-bold text-white font-display uppercase tracking-wider">PRESET ACTIVE WORKOUT SCHEMES</h3>
             <p className="text-xs text-[#64748B] font-mono">Roster of custom plans deployed on client profiles on platform databases.</p>
           </div>
 
@@ -1702,7 +1750,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       </div>
                       <Link
                         to={`/client/${plan.clientId}?tab=plans`}
-                        className="text-center py-1.5 bg-[#1E1E24] hover:bg-neutral-200 text-[#0F172A] border border-[#262630] font-mono text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all"
+                        className="text-center py-1.5 bg-[#1E1E24] hover:bg-neutral-200 text-white border border-[#262630] font-mono text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all"
                       >
                         Verify, Edit & Update
                       </Link>
@@ -1724,7 +1772,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6"
         >
           <div>
-            <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">DIET PLANS CATALOGUE</h3>
+            <h3 className="text-lg font-bold text-white font-display uppercase tracking-wider">DIET PLANS CATALOGUE</h3>
             <p className="text-xs text-[#64748B] font-mono">Active macronutrient indices and timelines registered on platform records.</p>
           </div>
 
@@ -1775,19 +1823,19 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     <div className="grid grid-cols-4 gap-2 text-center bg-[#141417] p-2 rounded-xl border border-[#262630]">
                       <div>
                         <p className="text-[8px] font-mono text-[#64748B] uppercase">Kcal</p>
-                        <p className="text-xs font-extrabold text-[#0F172A] font-mono mt-0.5">{plan.calories || 2000}</p>
+                        <p className="text-xs font-extrabold text-white font-mono mt-0.5">{plan.calories || 2000}</p>
                       </div>
                       <div>
                         <p className="text-[8px] font-mono text-brand-red uppercase">Protein</p>
-                        <p className="text-xs font-extrabold text-[#0F172A] font-mono mt-0.5">{plan.protein || 150}g</p>
+                        <p className="text-xs font-extrabold text-white font-mono mt-0.5">{plan.protein || 150}g</p>
                       </div>
                       <div>
                         <p className="text-[8px] font-mono text-amber-600 uppercase">Carb</p>
-                        <p className="text-xs font-extrabold text-[#0F172A] font-mono mt-0.5">{plan.carbs || 180}g</p>
+                        <p className="text-xs font-extrabold text-white font-mono mt-0.5">{plan.carbs || 180}g</p>
                       </div>
                       <div>
                         <p className="text-[8px] font-mono text-emerald-600 uppercase">Fat</p>
-                        <p className="text-xs font-extrabold text-[#0F172A] font-mono mt-0.5">{plan.fats || 60}g</p>
+                        <p className="text-xs font-extrabold text-white font-mono mt-0.5">{plan.fats || 60}g</p>
                       </div>
                     </div>
 
@@ -1819,7 +1867,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       </div>
                       <Link
                         to={`/client/${plan.clientId}?tab=plans`}
-                        className="text-center py-1.5 bg-[#1E1E24] hover:bg-neutral-200 text-[#0F172A] border border-[#262630] font-mono text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all"
+                        className="text-center py-1.5 bg-[#1E1E24] hover:bg-neutral-200 text-white border border-[#262630] font-mono text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all"
                       >
                         Verify, Edit & Update
                       </Link>
@@ -1836,7 +1884,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
       {currentTab === 'reports' && (
         <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6">
           <div>
-            <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">COACHES REPORTING DESK</h3>
+            <h3 className="text-lg font-bold text-white font-display uppercase tracking-wider">COACHES REPORTING DESK</h3>
             <p className="text-xs text-[#64748B] font-mono">Download standard progress summaries, posture reviews, or payment metrics PDFs.</p>
           </div>
 
@@ -1922,7 +1970,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
           {/* GMAIL BROADCAST & COMMUNICATIONS HUB */}
           <div className="mt-8 pt-6 border-t border-[#262630]">
-            <h4 className="text-sm font-bold text-[#0F172A] font-mono uppercase tracking-widest text-brand-red mb-4 flex items-center gap-2">
+            <h4 className="text-sm font-bold text-white font-mono uppercase tracking-widest text-brand-red mb-4 flex items-center gap-2">
               <span className="w-1.5 h-1.5 bg-brand-red rounded-full animate-ping"></span>
               Gmail Broadcast & Communications Center
             </h4>
@@ -2036,7 +2084,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
         >
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b pb-3 mb-3 gap-3">
             <div>
-              <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">SUBSCRIPTION BILLING LEDGER</h3>
+              <h3 className="text-lg font-bold text-white font-display uppercase tracking-wider">SUBSCRIPTION BILLING LEDGER</h3>
               <p className="text-xs text-[#64748B] font-mono">Invoice registries, receipts downloads, and client renew controls.</p>
             </div>
             <div className="flex items-center space-x-2">
@@ -2064,7 +2112,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
               className="bg-[#0D0D0F] border border-[#262630] p-5 rounded-2xl space-y-4 text-xs font-mono"
             >
               <div>
-                <h4 className="text-sm font-bold text-[#0F172A] font-display uppercase tracking-wider">Record Membership Payment</h4>
+                <h4 className="text-sm font-bold text-white font-display uppercase tracking-wider">Record Membership Payment</h4>
                 <p className="text-[10px] text-[#64748B]">Fill in amount, due date and package info to register billing.</p>
               </div>
 
@@ -2152,7 +2200,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                         });
                       }
                     }}
-                    className="w-full p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-[#0F172A] font-bold"
+                    className="w-full p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-white font-bold"
                   >
                     <option value="">-- Choose Package Preset (Or custom type below) --</option>
                     <option value="monthly">Monthly EMS Training (₹5,000 / 8 Sessions)</option>
@@ -2167,7 +2215,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     value={selectedAccountsClientId}
                     onChange={(e) => setSelectedAccountsClientId(e.target.value)}
                     required
-                    className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A]"
+                    className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-white"
                   >
                     <option value="">-- Choose Athlete --</option>
                     {clients.map(c => (
@@ -2184,7 +2232,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     placeholder="e.g. EMS 12-Sessions Membership"
                     value={quickPaymentData.package}
                     onChange={(e) => setQuickPaymentData({...quickPaymentData, package: e.target.value})}
-                    className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A]"
+                    className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-white"
                   />
                 </div>
 
@@ -2197,7 +2245,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       placeholder="Amount in ₹"
                       value={quickPaymentData.amount}
                       onChange={(e) => setQuickPaymentData({...quickPaymentData, amount: e.target.value})}
-                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A] no-theme-override"
+                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-white no-theme-override"
                     />
                   </div>
                   
@@ -2213,7 +2261,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           const calculatedAmount = (parseFloat(rate) || 0) * (parseFloat(sessions) || 0);
                           setQuickPaymentData({...quickPaymentData, paymentRate: rate, amount: calculatedAmount.toString()});
                       }}
-                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A] no-theme-override"
+                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-white no-theme-override"
                     />
                   </div>
 
@@ -2229,7 +2277,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           const calculatedAmount = (parseFloat(rate) || 0) * (parseFloat(sessions) || 0);
                           setQuickPaymentData({...quickPaymentData, numberOfSessions: sessions, amount: calculatedAmount.toString()});
                       }}
-                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A] no-theme-override"
+                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-white no-theme-override"
                     />
                   </div>
 
@@ -2247,7 +2295,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           dueDate: format(addDays(new Date(quickPaymentData.startDate), days), 'yyyy-MM-dd')
                         });
                       }}
-                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A]"
+                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-white"
                     >
                       <option value="Monthly">Monthly</option>
                       <option value="Session-Based">Session-Based</option>
@@ -2264,7 +2312,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       required
                       value={quickPaymentData.startDate}
                       onChange={(e) => setQuickPaymentData({...quickPaymentData, startDate: e.target.value})}
-                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A]"
+                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-white"
                     />
                   </div>
 
@@ -2275,7 +2323,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       required
                       value={quickPaymentData.dueDate}
                       onChange={(e) => setQuickPaymentData({...quickPaymentData, dueDate: e.target.value})}
-                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A]"
+                      className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-white"
                     />
                   </div>
                 </div>
@@ -2285,7 +2333,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   <select
                     value={quickPaymentData.status}
                     onChange={(e) => setQuickPaymentData({...quickPaymentData, status: e.target.value as any})}
-                    className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-[#0F172A]"
+                    className="w-full p-2.5 bg-[#141417] border border-[#262630] rounded-lg text-white"
                   >
                     <option value="Paid">Paid (Cash/Online Received)</option>
                     <option value="Pending">Pending (Invoice Dispatched)</option>
@@ -2346,7 +2394,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                           </div>
                         )}
                         <div>
-                          <p className="font-bold text-[#0F172A] text-sm uppercase tracking-wide">{clientObj.name || 'Unnamed Recruit'}</p>
+                          <p className="font-bold text-white text-sm uppercase tracking-wide">{clientObj.name || 'Unnamed Recruit'}</p>
                           <p className="text-[9px] text-[#64748B] font-normal">{clientObj.email}</p>
                         </div>
                       </div>
@@ -2396,7 +2444,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-4 pt-3 border-t border-[#262630] gap-3">
                       <div className="flex items-center space-x-2">
                         <span className="text-[9px] text-[#64748B] font-bold uppercase">LEDGER VALUE:</span>
-                        <span className="text-sm font-bold text-[#0F172A]">₹{(Number(record.amount) || 0).toLocaleString('en-IN')}</span>
+                        <span className="text-sm font-bold text-white">₹{(Number(record.amount) || 0).toLocaleString('en-IN')}</span>
                       </div>
 
                       <div className="flex items-center space-x-2 self-end sm:self-auto">
@@ -2514,7 +2562,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
       )}
 
       {/* 9. CALENDAR & SESSIONS TAB */}
-      {currentTab === 'calendar' && (
+      {(currentTab === 'calendar' || currentTab === 'sessions') && (
         <div className="space-y-6">
           {/* Live Google Calendar Integration */}
           <GoogleCalendarIntegration sessions={sessions} clients={clients} />
@@ -2522,7 +2570,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           {/* Calendar scheduler sessions */}
           <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6">
             <div>
-              <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">UPCOMING BOOKINGS TIMELINE</h3>
+              <h3 className="text-lg font-bold text-white font-display uppercase tracking-wider">UPCOMING BOOKINGS TIMELINE</h3>
               <p className="text-xs text-[#64748B] font-mono">Active booked EMS workout sessions currently scheduled.</p>
             </div>
 
@@ -2551,7 +2599,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           {rescheduleRequests.length > 0 && (
             <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-6">
               <div>
-                <h3 className="text-base font-bold text-[#0F172A] font-display uppercase tracking-wider">RESCHEDULING REQUEST QUEUE</h3>
+                <h3 className="text-base font-bold text-white font-display uppercase tracking-wider">RESCHEDULING REQUEST QUEUE</h3>
                 <p className="text-xs text-[#64748B] font-mono">Requires trainer approval to relocate booking calendars.</p>
               </div>
 
@@ -2589,7 +2637,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#262630] pb-4">
               <div>
-                <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider flex items-center gap-2">
+                <h3 className="text-lg font-bold text-white font-display uppercase tracking-wider flex items-center gap-2">
                   <span className="w-2.5 h-2.5 bg-brand-red rounded-full animate-ping"></span>
                   Elite Performance Attendance Registry
                 </h3>
@@ -2766,7 +2814,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center space-x-2">
-                          <p className="font-bold text-[#0F172A] uppercase truncate">{client.name}</p>
+                          <p className="font-bold text-white uppercase truncate">{client.name}</p>
                           {client.isActive === false && (
                             <span className="px-1.5 py-0.5 text-[8px] bg-[#1E1E24] text-[#A1A1AA] rounded uppercase font-black shrink-0">Inactive</span>
                           )}
@@ -2781,7 +2829,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                               placeholder="e.g. 09:00 AM" 
                               value={logRecord.timing || ''} 
                               onChange={(e) => handleUpdateTiming(logRecord.id, e.target.value)}
-                              className="w-24 px-1.5 py-0.5 border border-slate-250 focus:border-brand-red rounded font-mono text-[10px] outline-none bg-[#141417] font-bold text-[#0F172A]"
+                              className="w-24 px-1.5 py-0.5 border border-slate-250 focus:border-brand-red rounded font-mono text-[10px] outline-none bg-[#141417] font-bold text-white"
                             />
                           </div>
                         )}
@@ -2892,7 +2940,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <h5 className="font-mono text-xs font-black text-[#0F172A] uppercase">{item.name}</h5>
+                          <h5 className="font-mono text-xs font-black text-white uppercase">{item.name}</h5>
                           <p className="text-[9px] text-zinc-500 font-mono font-bold mt-0.5">{item.email}</p>
                         </div>
                         <span className="px-2 py-0.5 bg-rose-600 text-white text-[9px] font-black rounded animate-pulse shrink-0">
@@ -2967,7 +3015,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
           {/* TOP METRICS BOARD */}
           <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-4">
             <div>
-              <h3 className="text-lg font-bold text-[#0F172A] font-display uppercase tracking-wider">Speed Fit Financial Control Seat</h3>
+              <h3 className="text-lg font-bold text-white font-display uppercase tracking-wider">Speed Fit Financial Control Seat</h3>
               <p className="text-xs text-[#64748B] font-mono">Real-time calculations of paid athletic fees, overdue balances, and income pipelines.</p>
             </div>
 
@@ -3025,7 +3073,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             {/* LEDGER & NOTIFICATION LIST */}
             <div className="lg:col-span-2 bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-4">
               <div className="flex justify-between items-center border-b pb-2">
-                <span className="text-xs font-mono font-bold text-[#0F172A] uppercase tracking-wider">Athlete Accounts Balance Ledger</span>
+                <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">Athlete Accounts Balance Ledger</span>
                 <span className="text-[9px] font-mono text-[#64748B] font-bold">Total Clients: {clients.length}</span>
               </div>
 
@@ -3067,7 +3115,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     >
                       <div className="space-y-1 w-full sm:w-auto">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-bold text-[#0F172A] uppercase">{client.name}</p>
+                          <p className="font-bold text-white uppercase">{client.name}</p>
                           <span className="text-[#A1A1AA]">•</span>
                           <span className={`px-2 py-0.5 text-[8px] font-bold uppercase rounded border ${badgeStyle}`}>
                             {pType}
@@ -3180,7 +3228,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             <div className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] shadow-sm space-y-4">
               <div>
                 <span className="text-[10px] font-mono tracking-widest uppercase font-black text-brand-red block">COLLECTION MANAGER</span>
-                <h4 className="text-sm font-bold text-[#0F172A] font-display uppercase tracking-wider mt-0.5">Register Payment Entry</h4>
+                <h4 className="text-sm font-bold text-white font-display uppercase tracking-wider mt-0.5">Register Payment Entry</h4>
                 <p className="text-[9px] font-mono text-[#64748B] font-bold font-mono">Issue client billing packages and paid receipts securely.</p>
               </div>
 
@@ -3227,7 +3275,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     setIsSavingPayment(false);
                   }
                 }}
-                className="space-y-3 text-xs font-mono text-[#0F172A]"
+                className="space-y-3 text-xs font-mono text-white"
               >
                 <div className="space-y-1">
                   <label className="block text-[8px] font-bold text-[#A1A1AA] uppercase">Select Athlete</label>
@@ -3235,7 +3283,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     value={selectedAccountsClientId}
                     onChange={(e) => setSelectedAccountsClientId(e.target.value)}
                     required
-                    className="w-full p-2 bg-[#0D0D0F] border rounded-lg text-[#0F172A]"
+                    className="w-full p-2 bg-[#0D0D0F] border rounded-lg text-white"
                   >
                     <option value="">-- Choose Athlete --</option>
                     {clients.map(c => (
@@ -3252,7 +3300,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     placeholder="e.g. EMS 12-Sessions Membership"
                     value={quickPaymentData.package}
                     onChange={(e) => setQuickPaymentData({...quickPaymentData, package: e.target.value})}
-                    className="w-full p-2 bg-[#141417] border rounded-lg text-[#0F172A]"
+                    className="w-full p-2 bg-[#141417] border rounded-lg text-white"
                   />
                 </div>
 
@@ -3265,7 +3313,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       placeholder="Amount in ₹"
                       value={quickPaymentData.amount}
                       onChange={(e) => setQuickPaymentData({...quickPaymentData, amount: e.target.value})}
-                      className="w-full p-2 bg-[#141417] border rounded-lg text-[#0F172A]"
+                      className="w-full p-2 bg-[#141417] border rounded-lg text-white"
                     />
                   </div>
 
@@ -3274,7 +3322,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                     <select
                       value={quickPaymentData.packageType}
                       onChange={(e) => setQuickPaymentData({...quickPaymentData, packageType: e.target.value as any})}
-                      className="w-full p-2 bg-[#0D0D0F] border rounded-lg text-[#0F172A]"
+                      className="w-full p-2 bg-[#0D0D0F] border rounded-lg text-white"
                     >
                       <option value="Monthly">Monthly</option>
                       <option value="Quarterly">Quarterly</option>
@@ -3292,7 +3340,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       required
                       value={quickPaymentData.startDate}
                       onChange={(e) => setQuickPaymentData({...quickPaymentData, startDate: e.target.value})}
-                      className="w-full p-2 bg-[#141417] border rounded-lg text-[#0F172A]"
+                      className="w-full p-2 bg-[#141417] border rounded-lg text-white"
                     />
                   </div>
 
@@ -3303,7 +3351,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                       required
                       value={quickPaymentData.dueDate}
                       onChange={(e) => setQuickPaymentData({...quickPaymentData, dueDate: e.target.value})}
-                      className="w-full p-2 bg-[#141417] border rounded-lg text-[#0F172A]"
+                      className="w-full p-2 bg-[#141417] border rounded-lg text-white"
                     />
                   </div>
                 </div>
@@ -3313,7 +3361,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
                   <select
                     value={quickPaymentData.status}
                     onChange={(e) => setQuickPaymentData({...quickPaymentData, status: e.target.value as any})}
-                    className="w-full p-2 bg-[#0D0D0F] border rounded-lg text-[#0F172A]"
+                    className="w-full p-2 bg-[#0D0D0F] border rounded-lg text-white"
                   >
                     <option value="Paid">Paid (Cash/Online Received)</option>
                     <option value="Pending">Pending (Invoice Dispatched)</option>
@@ -3332,6 +3380,11 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             </div>
           </div>
         </motion.div>
+      )}
+
+      {/* 9B. LEADS & ASSESSMENTS PIPELINE TAB */}
+      {currentTab === 'leads' && (
+        <TrainerLeadsView userData={userData} clients={clients} />
       )}
 
       {/* 10. TRAINING HQ SETTINGS TAB */}
@@ -3489,7 +3542,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] max-w-sm w-full shadow-2xl space-y-4"
           >
             <div className="flex justify-between items-center border-b pb-2">
-              <h3 className="text-sm font-bold text-[#0F172A] font-mono uppercase">ADD CLIENT PROFILE</h3>
+              <h3 className="text-sm font-bold text-white font-mono uppercase">ADD CLIENT PROFILE</h3>
               <button 
                 type="button"
                 onClick={() => setShowAddClientModal(false)}
@@ -3555,7 +3608,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
             className="bg-[#141417] border border-[#262630] p-6 rounded-[24px] max-w-md w-full shadow-2xl space-y-4 font-mono text-xs"
           >
             <div className="flex justify-between items-center border-b pb-2">
-              <h3 className="text-sm font-bold text-[#0F172A] uppercase">MANAGE TRANSFORMATION REVIEWS</h3>
+              <h3 className="text-sm font-bold text-white uppercase">MANAGE TRANSFORMATION REVIEWS</h3>
               <button 
                 type="button"
                 onClick={() => setShowTestimonialModal(false)}

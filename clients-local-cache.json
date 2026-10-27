@@ -1,0 +1,40 @@
+[
+  {
+    "uid": "client_1792918179020",
+    "id": "client_1792918179020",
+    "name": "Kavita Rao",
+    "email": "kavita.rao@example.com",
+    "phoneNumber": "+91 99887 76655",
+    "role": "CLIENT",
+    "status": "Active",
+    "isActive": true,
+    "onboardingCompleted": false,
+    "trainerId": "thousiefkhan298@gmail.com",
+    "passwordHash": "32aae9e211400a5efc411cae2bb153d0be5ea66b3d7b39bd999c4cb8164f4005",
+    "assignedPassword": "passwordKavita1",
+    "leadAssessmentId": "lead_1792918186778_e4k5z",
+    "fitnessAssessment": {
+      "height": "",
+      "weight": "",
+      "goals": [
+        "Strength Training"
+      ],
+      "trainingExperience": "Beginner",
+      "activityLevel": "Sedentary"
+    },
+    "healthFlags": [],
+    "createdAt": "2026-10-25T08:49:39.018Z",
+    "updatedAt": "2026-10-25T08:49:51.663Z",
+    "healthAssessmentSummary": {
+      "goals": {
+        "primaryGoal": "Marathon Prep",
+        "targetWeight": "",
+        "timeline": "3 months",
+        "motivationNotes": ""
+      },
+      "healthFlags": [],
+      "injuriesAndMedicalNotes": "",
+      "lastLinkedAt": "2026-10-25T08:49:51.663Z"
+    }
+  }
+]

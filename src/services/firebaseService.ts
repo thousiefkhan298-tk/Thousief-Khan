@@ -1,7 +1,8 @@
-import { db, handleFirestoreError, OperationType, storage, reportFirestoreError } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType, storage, reportFirestoreError } from '../firebase';
 import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, query, where, onSnapshot, addDoc, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { User, FavoriteExercise, WorkoutTemplate, Testimonial } from '../types';
+import { User, FavoriteExercise, WorkoutTemplate, Testimonial, LeadSubmission, LeadStatus, LeadFollowUpItem } from '../types';
+import { validateSixtyMinuteNotice } from './sessionBookingService';
 
 function compressAndGetBase64(file: File, maxWidth = 400, maxHeight = 400, quality = 0.75): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -383,19 +384,86 @@ export const firebaseService = {
     });
   },
 
-  async markAttendance(attendance: any) {
+  async markAttendance(attendance: any, trainerUser?: { uid: string; name?: string }) {
     const path = 'attendance';
     try {
-      await addDoc(collection(db, path), attendance);
+      const now = new Date().toISOString();
+      const auditEntry = {
+        changedBy: trainerUser?.uid || 'trainer',
+        changedByName: trainerUser?.name || 'Speed Fit Coach',
+        changedAt: now,
+        newStatus: attendance.status,
+        newNotes: attendance.trainerNotes || attendance.notes || '',
+        reason: 'Initial attendance entry'
+      };
+
+      // Prevent duplicate session deduction: Check if attendance already exists for client on this date
+      if (!attendance.id && attendance.clientId && attendance.date) {
+        const q = query(
+          collection(db, path),
+          where('clientId', '==', attendance.clientId),
+          where('date', '==', attendance.date)
+        );
+        const existingSnap = await getDocs(q);
+        const matchingDoc = existingSnap.docs.find(d => {
+          const dData = d.data();
+          return !attendance.time || !dData.time || dData.time === attendance.time;
+        });
+        if (matchingDoc) {
+          await this.updateAttendance(matchingDoc.id, attendance, trainerUser, 'Updated existing session attendance (duplicate prevention)');
+          return matchingDoc.id;
+        }
+      }
+
+      const recordWithAudit = {
+        ...attendance,
+        status: attendance.status || 'Present',
+        trainerNotes: attendance.trainerNotes || attendance.notes || '',
+        createdBy: trainerUser?.uid || 'trainer',
+        createdAt: now,
+        updatedAt: now,
+        auditHistory: [auditEntry]
+      };
+
+      if (attendance.id) {
+        await setDoc(doc(db, path, attendance.id), recordWithAudit);
+        return attendance.id;
+      } else {
+        const ref = await addDoc(collection(db, path), recordWithAudit);
+        return ref.id;
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, path);
     }
   },
 
-  async updateAttendance(id: string, data: any) {
+  async updateAttendance(id: string, data: any, trainerUser?: { uid: string; name?: string }, reason?: string) {
     const path = `attendance/${id}`;
     try {
-      await updateDoc(doc(db, 'attendance', id), data);
+      const now = new Date().toISOString();
+      const docRef = doc(db, 'attendance', id);
+      const snap = await getDoc(docRef);
+      const existing = snap.exists() ? snap.data() : {};
+
+      const auditEntry = {
+        changedBy: trainerUser?.uid || 'trainer',
+        changedByName: trainerUser?.name || 'Speed Fit Coach',
+        changedAt: now,
+        oldStatus: existing.status,
+        newStatus: data.status || existing.status,
+        oldNotes: existing.trainerNotes || existing.notes || '',
+        newNotes: data.trainerNotes !== undefined ? data.trainerNotes : (data.notes || existing.notes || ''),
+        reason: reason || 'Attendance correction'
+      };
+
+      const existingAudit = Array.isArray(existing.auditHistory) ? existing.auditHistory : [];
+
+      await updateDoc(docRef, {
+        ...data,
+        updatedBy: trainerUser?.uid || 'trainer',
+        updatedAt: now,
+        auditHistory: [...existingAudit, auditEntry]
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
     }
@@ -501,10 +569,108 @@ export const firebaseService = {
     }
   },
 
+  // Session Bookings & Requests with 60-Minute Notice Rule
+  async requestSession(bookingData: any) {
+    try {
+      const response = await fetch('/api/sessions/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bookingData)
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to submit session request.');
+      }
+      return data;
+    } catch (err: any) {
+      // If server route not responding or offline, fallback to direct Firestore with client-side 60m validation
+      const check = validateSixtyMinuteNotice(bookingData.date, bookingData.time);
+      if (!check.valid) {
+        throw new Error(check.error || 'Requests must be made at least 60 minutes in advance.');
+      }
+      const path = 'sessions';
+      const ref = await addDoc(collection(db, path), {
+        ...bookingData,
+        status: 'Pending',
+        requestedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      return { success: true, sessionId: ref.id };
+    }
+  },
+
+  async trainerActionSession(sessionId: string, action: 'approve' | 'reject' | 'propose', details: any = {}) {
+    try {
+      const response = await fetch('/api/sessions/trainer-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, action, ...details })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Action failed.');
+      }
+      return data;
+    } catch (err: any) {
+      const path = `sessions/${sessionId}`;
+      if (action === 'approve') {
+        await updateDoc(doc(db, 'sessions', sessionId), { status: 'Confirmed', updatedAt: new Date().toISOString() });
+      } else if (action === 'reject') {
+        await updateDoc(doc(db, 'sessions', sessionId), { status: 'Rejected', rejectionReason: details.reason, updatedAt: new Date().toISOString() });
+      } else if (action === 'propose') {
+        await updateDoc(doc(db, 'sessions', sessionId), { status: 'Proposed', proposedDate: details.proposedDate, proposedTime: details.proposedTime, trainerNotes: details.reason, updatedAt: new Date().toISOString() });
+      }
+      return { success: true };
+    }
+  },
+
+  async clientRespondProposal(sessionId: string, clientId: string, response: 'accept' | 'decline') {
+    try {
+      const res = await fetch('/api/sessions/client-respond-proposal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, clientId, response })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to respond to proposal.');
+      }
+      return data;
+    } catch (err: any) {
+      const path = `sessions/${sessionId}`;
+      if (response === 'accept') {
+        const snap = await getDoc(doc(db, 'sessions', sessionId));
+        const s = snap.data();
+        await updateDoc(doc(db, 'sessions', sessionId), {
+          date: s?.proposedDate || s?.date,
+          time: s?.proposedTime || s?.time,
+          status: 'Confirmed',
+          updatedAt: new Date().toISOString()
+        });
+      } else {
+        await updateDoc(doc(db, 'sessions', sessionId), { status: 'Cancelled', updatedAt: new Date().toISOString() });
+      }
+      return { success: true };
+    }
+  },
+
+  async cancelSession(sessionId: string) {
+    const path = `sessions/${sessionId}`;
+    try {
+      await updateDoc(doc(db, 'sessions', sessionId), {
+        status: 'Cancelled',
+        updatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  },
+
   async confirmSession(id: string, data: any) {
     const path = `sessions/${id}`;
     try {
-      await updateDoc(doc(db, 'sessions', id), data);
+      await updateDoc(doc(db, 'sessions', id), { ...data, status: 'Confirmed', updatedAt: new Date().toISOString() });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
     }
@@ -519,11 +685,64 @@ export const firebaseService = {
     }
   },
 
+  // Onboarding Save Progress & Submission
+  async saveOnboardingProgress(uid: string, step: number, partialData: any) {
+    const path = `users/${uid}`;
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        onboardingStep: step,
+        onboardingDraft: partialData,
+        ...partialData,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  },
+
+  async setAssessmentReopened(clientId: string, reopened: boolean) {
+    const path = `users/${clientId}`;
+    try {
+      await updateDoc(doc(db, 'users', clientId), {
+        assessmentReopened: reopened,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  },
+
   async submitOnboarding(uid: string, data: any) {
     const path = `users/${uid}`;
     try {
-      // 1. Update user document
-      await updateDoc(doc(db, 'users', uid), { ...data, onboardingCompleted: true });
+      const now = new Date().toISOString();
+      // 1. Update user document with all completed sections and flags
+      await updateDoc(doc(db, 'users', uid), {
+        ...data,
+        onboardingCompleted: true,
+        onboardingSubmittedAt: now,
+        assessmentReopened: false,
+        termsAccepted: true,
+        termsAcceptedAt: now,
+        termsAcceptedName: data.termsConsent?.typedFullName || data.clientDetails?.fullName || '',
+        termsVersion: data.termsConsent?.termsVersion || '2.5',
+        updatedAt: now
+      });
+
+      // 2. Archive submission in assessmentsHistory
+      try {
+        await addDoc(collection(db, 'assessmentsHistory'), {
+          clientId: uid,
+          clientDetails: data.clientDetails || null,
+          fitnessAssessment: data.fitnessAssessment || null,
+          medicalAssessment: data.medicalAssessment || null,
+          dietPreferences: data.dietPreferences || null,
+          termsConsent: data.termsConsent || null,
+          submittedAt: now
+        });
+      } catch (histErr) {
+        console.warn('Could not archive assessment history:', histErr);
+      }
 
       // 2. Also save/update healthAssessment in separate collection
       if (data.healthAssessment) {
@@ -967,12 +1186,261 @@ export const firebaseService = {
     }
   },
 
+  // Progress Records (Trainer records, Client views progress & feedback)
+  subscribeToProgressRecords(clientId: string, callback: (records: any[]) => void) {
+    const path = 'progressRecords';
+    const q = query(collection(db, path), where('clientId', '==', clientId));
+    return onSnapshot(q, (snapshot) => {
+      const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      records.sort((a: any, b: any) => new Date(b.reviewDate || b.createdAt).getTime() - new Date(a.reviewDate || a.createdAt).getTime());
+      callback(records);
+    }, (error) => {
+      reportFirestoreError(error, OperationType.LIST, path);
+    });
+  },
+
+  async saveProgressRecord(record: any) {
+    const path = 'progressRecords';
+    try {
+      const now = new Date().toISOString();
+      if (record.id) {
+        const { id, ...data } = record;
+        await updateDoc(doc(db, path, id), { ...data, updatedAt: now });
+        return id;
+      } else {
+        const ref = await addDoc(collection(db, path), {
+          ...record,
+          createdAt: now,
+          updatedAt: now
+        });
+        return ref.id;
+      }
+    } catch (error) {
+      handleFirestoreError(error, record.id ? OperationType.UPDATE : OperationType.CREATE, path);
+    }
+  },
+
+  async deleteProgressRecord(id: string) {
+    const path = `progressRecords/${id}`;
+    try {
+      await deleteDoc(doc(db, 'progressRecords', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  },
+
+  // Notifications
+  subscribeToNotifications(userId: string, callback: (notifs: any[]) => void) {
+    const path = 'notifications';
+    const q = query(collection(db, path), where('userId', '==', userId));
+    return onSnapshot(q, (snapshot) => {
+      const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      notifs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      callback(notifs);
+    }, (error) => {
+      reportFirestoreError(error, OperationType.LIST, path);
+    });
+  },
+
+  async markNotificationAsRead(id: string) {
+    const path = `notifications/${id}`;
+    try {
+      await updateDoc(doc(db, 'notifications', id), { read: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  },
+
+  async createNotification(notif: any) {
+    const path = 'notifications';
+    try {
+      await addDoc(collection(db, path), {
+        ...notif,
+        read: false,
+        createdAt: new Date().toISOString()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
+  },
+
   async deleteTestimonial(id: string) {
     const path = `testimonials/${id}`;
     try {
       await deleteDoc(doc(db, 'testimonials', id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  },
+
+  // Lead Submissions (Trainer pipeline access via secure server API)
+  subscribeToLeads(callback: (leads: LeadSubmission[]) => void) {
+    let active = true;
+
+    const fetchLatest = async () => {
+      if (!active) return;
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'X-User-Role': 'TRAINER'
+        };
+        const user = auth.currentUser;
+        if (user) {
+          if (user.email) headers['X-User-Email'] = user.email;
+          try {
+            const token = await user.getIdToken();
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+          } catch {}
+        }
+        const res = await fetch('/api/leads', { headers });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.leads) && active) {
+            callback(json.leads);
+          }
+        }
+      } catch (err: any) {
+        // Silent recovery
+      }
+    };
+
+    fetchLatest();
+    const interval = setInterval(fetchLatest, 15000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  },
+
+  async getLeads(): Promise<LeadSubmission[]> {
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-User-Role': 'TRAINER'
+      };
+      const user = auth.currentUser;
+      if (user) {
+        if (user.email) headers['X-User-Email'] = user.email;
+        try {
+          const token = await user.getIdToken();
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+        } catch {}
+      }
+      const res = await fetch('/api/leads', { headers });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.leads)) {
+          return json.leads;
+        }
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  },
+
+  async updateLeadStatus(id: string, status: LeadStatus, followUpAt?: string) {
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-User-Role': 'TRAINER'
+      };
+      const user = auth.currentUser;
+      if (user) {
+        if (user.email) headers['X-User-Email'] = user.email;
+        try {
+          const token = await user.getIdToken();
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+        } catch {}
+      }
+      await fetch('/api/leads/update', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ leadId: id, status, followUpAt })
+      });
+    } catch (error) {
+      console.warn('Update lead status error:', error);
+    }
+  },
+
+  async updateLead(id: string, updates: Partial<LeadSubmission>) {
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-User-Role': 'TRAINER'
+      };
+      const user = auth.currentUser;
+      if (user) {
+        if (user.email) headers['X-User-Email'] = user.email;
+        try {
+          const token = await user.getIdToken();
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+        } catch {}
+      }
+      await fetch('/api/leads/update', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          leadId: id,
+          status: updates.status,
+          followUpAt: updates.followUpAt,
+          trainerNotes: updates.trainerNotes
+        })
+      });
+    } catch (error) {
+      console.warn('Update lead error:', error);
+    }
+  },
+
+  async addLeadFollowUp(id: string, item: LeadFollowUpItem) {
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-User-Role': 'TRAINER'
+      };
+      const user = auth.currentUser;
+      if (user) {
+        if (user.email) headers['X-User-Email'] = user.email;
+        try {
+          const token = await user.getIdToken();
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+        } catch {}
+      }
+      await fetch('/api/leads/update', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          leadId: id,
+          followUpItem: item
+        })
+      });
+    } catch (error) {
+      console.warn('Add lead follow-up error:', error);
+    }
+  },
+
+  async deleteLead(id: string) {
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-User-Role': 'TRAINER'
+      };
+      const user = auth.currentUser;
+      if (user) {
+        if (user.email) headers['X-User-Email'] = user.email;
+        try {
+          const token = await user.getIdToken();
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+        } catch {}
+      }
+      await fetch('/api/leads/delete', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ leadId: id })
+      });
+    } catch (error) {
+      console.warn('Delete lead error:', error);
     }
   },
 };

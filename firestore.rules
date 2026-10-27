@@ -9,16 +9,19 @@ service cloud.firestore {
        return request.auth != null;
     }
 
-    function isEmailVerified() {
-      return isAuthenticated() && request.auth.token.email_verified == true;
+    function isOwnerAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email != null && (
+          request.auth.token.email.lower() == 'thousiefkhan298@gmail.com' ||
+          request.auth.token.email.lower() == 'speedfit029@gmail.com'
+        )) ||
+        request.auth.uid == 'Wr3ZaCCtFkM5IuAHUFsZznq973h2'
+      );
     }
 
     // Checking if the requested email lower case matches trainers
     function isTrainerEmail(email) {
       return email != null && (
-        email == 'thousiefkhan298@gmail.com' || 
-        email == 'speedfit029@gmail.com' || 
-        email == 'thousiefk@gmail.com' ||
         email.lower() == 'thousiefkhan298@gmail.com' ||
         email.lower() == 'speedfit029@gmail.com' ||
         email.lower() == 'thousiefk@gmail.com'
@@ -31,17 +34,30 @@ service cloud.firestore {
 
     function isTrainer() {
        return isAuthenticated() && (
+         isOwnerAdmin() ||
          (request.auth.token.email != null && isTrainerEmail(request.auth.token.email)) ||
          request.auth.uid == 'Wr3ZaCCtFkM5IuAHUFsZznq973h2' ||
-         request.auth.uid == 'another_trainer_uid' ||
          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'TRAINER')
        );
+    }
+
+    // Enforce assigned trainer access (unless owner/admin)
+    function isAssignedTrainer(clientId) {
+      return isAuthenticated() && (
+        isOwnerAdmin() ||
+        (isTrainer() && (
+          !exists(/databases/$(database)/documents/users/$(clientId)) ||
+          !('trainerId' in get(/databases/$(database)/documents/users/$(clientId)).data) ||
+          get(/databases/$(database)/documents/users/$(clientId)).data.trainerId == null ||
+          get(/databases/$(database)/documents/users/$(clientId)).data.trainerId == request.auth.uid
+        ))
+      );
     }
 
     // Role is a privilege boundary and cannot be self-assigned.
     function grantsTrainerRole(data) {
       return data.role != 'TRAINER' ||
-             isTrainer() ||
+             isOwnerAdmin() ||
              (request.auth.token.email != null && isTrainerEmail(request.auth.token.email.lower()));
     }
 
@@ -79,77 +95,12 @@ service cloud.firestore {
              (!('status' in data) || data.status in ['Active', 'Inactive']) &&
              (!('name' in data) || data.name is string) &&
              (!('phoneNumber' in data) || data.phoneNumber is string) &&
-             (!('bio' in data) || data.bio is string) &&
-             (!('specialties' in data) || data.specialties is string) &&
-             (!('certifications' in data) || data.certifications is string) &&
-             (!('experience' in data) || data.experience is string) &&
-             (!('photoURL' in data) || data.photoURL is string) &&
-             (!('avatar' in data) || data.avatar is string) &&
-             (!('isActive' in data) || data.isActive is bool) &&
              (!('clientDetails' in data) || data.clientDetails is map) &&
-             (!('concern' in data) || data.concern is map) &&
-             (!('healthAssessment' in data) || data.healthAssessment is map) &&
              (!('fitnessAssessment' in data) || data.fitnessAssessment is map) &&
-             (!('googleLinked' in data) || data.googleLinked is bool) &&
-             (!('isMigrated' in data) || data.isMigrated is bool) &&
-             (!('migratedTo' in data) || data.migratedTo is string) &&
-             data.keys().size() <= 40;
-    }
-
-    function isValidHealthAssessment(data) {
-      return data.keys().hasAll(['clientId', 'updatedAt']) &&
-             isValidId(data.clientId) &&
-             isValidDateTime(data.updatedAt) &&
-             (!('height' in data) || data.height is string) &&
-             (!('weight' in data) || data.weight is string) &&
-             data.keys().size() <= 40;
-    }
-
-    // Looser size to allow all fields
-    function isValidFitnessAssessment(data) {
-      return data.keys().hasAll(['clientId', 'updatedAt', 'date']) &&
-             isValidId(data.clientId) &&
-             isValidDateTime(data.updatedAt) &&
-             isValidDate(data.date) &&
-             data.keys().size() <= 50;
-    }
-
-    function isValidWorkoutLog(data) {
-      return data.keys().hasAll(['clientId', 'date', 'entries']) &&
-             data.clientId is string &&
-             isValidDate(data.date) &&
-             data.entries is list;
-    }
-
-    function isValidAttendance(data) {
-      return data.keys().hasAll(['clientId', 'date', 'status']) &&
-             data.clientId is string &&
-             isValidDate(data.date) &&
-             data.status in ['Present', 'Missed', 'Absent', 'Cancelled', 'Rescheduled', 'Late'];
-    }
-
-    function isValidMessage(data) {
-      return data.keys().hasAll(['senderId', 'receiverId', 'participants', 'content', 'timestamp']) &&
-             data.senderId is string &&
-             data.receiverId is string &&
-             data.participants is list &&
-             data.content is string && data.content.size() > 0 && data.content.size() < 5000 &&
-             isValidDateTime(data.timestamp);
-    }
-
-    function isValidTestimonial(data) {
-      return data.keys().hasAll(['clientName', 'bodyQuote', 'trainerId', 'createdAt']) &&
-             data.clientName is string && data.clientName.size() > 0 && data.clientName.size() <= 200 &&
-             data.bodyQuote is string && data.bodyQuote.size() > 0 && data.bodyQuote.size() <= 5000 &&
-             data.trainerId is string &&
-             isValidDateTime(data.createdAt) &&
-             (!('clientEmail' in data) || data.clientEmail is string) &&
-             (!('beforeWeight' in data) || data.beforeWeight is string) &&
-             (!('afterWeight' in data) || data.afterWeight is string) &&
-             (!('durationWeeks' in data) || data.durationWeeks is string) &&
-             (!('imageUrl' in data) || data.imageUrl is string) &&
-             (!('achievement' in data) || data.achievement is string) &&
-             data.keys().size() <= 20;
+             (!('medicalAssessment' in data) || data.medicalAssessment is map) &&
+             (!('dietPreferences' in data) || data.dietPreferences is map) &&
+             (!('termsConsent' in data) || data.termsConsent is map) &&
+             data.keys().size() <= 60;
     }
 
     // ===============================================================
@@ -157,116 +108,152 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{uid} {
-      allow read: if isOwner(uid) || isTrainer() || (isAuthenticated() && request.auth.token.email.lower() == resource.data.email.lower()) || (isAuthenticated() && resource.data.role == 'TRAINER');
+      allow get: if isOwner(uid) || isTrainer() || resource.data.role == 'TRAINER' || (isAuthenticated() && resource.data.email != null && resource.data.email.lower() == request.auth.token.email.lower());
+      allow list: if isTrainer() || (isAuthenticated() && resource.data.role == 'TRAINER') || (isAuthenticated() && resource.data.email != null && resource.data.email.lower() == request.auth.token.email.lower());
       allow create: if (isOwner(uid) || isTrainer()) && isValidUser(request.resource.data) && request.resource.data.uid == uid &&
                     grantsTrainerRole(request.resource.data);
-      allow update: if (isOwner(uid) || isTrainer()) && isValidUser(request.resource.data) && request.resource.data.uid == uid &&
-                    (isTrainer() || request.resource.data.role == resource.data.role);
-      allow delete: if isTrainer() || (isAuthenticated() && request.auth.token.email.lower() == resource.data.email.lower());
-    }
-
-    match /workoutLogs/{docId} {
-      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
-      allow create: if isAuthenticated() && isValidWorkoutLog(request.resource.data) &&
-                    (isTrainer() || request.resource.data.clientId == request.auth.uid);
-      allow update: if isAuthenticated() && isValidWorkoutLog(request.resource.data) &&
-                    (isTrainer() || resource.data.clientId == request.auth.uid);
-      allow delete: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
-    }
-
-    match /trainerNotes/{docId} {
-      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
-      allow create, update, delete: if isTrainer();
+      allow update: if (
+        (isTrainer() && isAssignedTrainer(uid) && isValidUser(request.resource.data)) ||
+        (isOwner(uid) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role &&
+         (!('trainerId' in resource.data) || resource.data.trainerId == null || request.resource.data.trainerId == resource.data.trainerId)
+        )
+      );
+      allow delete: if isOwnerAdmin();
     }
 
     match /workoutPlans/{docId} {
       allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
-      allow create, update, delete: if isTrainer();
+      allow create: if isAssignedTrainer(request.resource.data.clientId);
+      allow update, delete: if isAssignedTrainer(resource.data.clientId);
+    }
+
+    match /dietPlans/{docId} {
+      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
+      allow create: if isAssignedTrainer(request.resource.data.clientId);
+      allow update, delete: if isAssignedTrainer(resource.data.clientId);
     }
 
     match /attendance/{docId} {
       allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
+      allow create: if isAssignedTrainer(request.resource.data.clientId);
+      allow update, delete: if isAssignedTrainer(resource.data.clientId);
+    }
+
+    match /paymentRecords/{docId} {
+      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
+      allow create: if isAssignedTrainer(request.resource.data.clientId);
+      allow update, delete: if isAssignedTrainer(resource.data.clientId);
+    }
+
+    match /progressRecords/{docId} {
+      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
+      allow create: if isAssignedTrainer(request.resource.data.clientId);
+      allow update, delete: if isAssignedTrainer(resource.data.clientId);
+    }
+
+    match /trainerNotes/{docId} {
+      allow read: if isAssignedTrainer(resource.data.clientId);
+      allow create, update, delete: if isAssignedTrainer(request.resource.data.clientId != null ? request.resource.data.clientId : resource.data.clientId);
+    }
+
+    match /sessions/{docId} {
+      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
+      allow create: if isAuthenticated() && (
+        (request.resource.data.clientId == request.auth.uid && request.resource.data.status == 'Pending') ||
+        isAssignedTrainer(request.resource.data.clientId)
+      );
+      allow update: if isAssignedTrainer(resource.data.clientId) ||
+                    (isAuthenticated() && resource.data.clientId == request.auth.uid &&
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'date', 'time', 'updatedAt']) &&
+                     (
+                       request.resource.data.status == 'Cancelled' ||
+                       (resource.data.status == 'Proposed' && request.resource.data.status == 'Confirmed')
+                     ));
+      allow delete: if isAssignedTrainer(resource.data.clientId);
+    }
+
+    match /notifications/{docId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isOwnerAdmin());
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid &&
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isOwnerAdmin());
+    }
+
+    match /assessmentsHistory/{docId} {
+      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
+      allow create: if isAuthenticated() && (request.resource.data.clientId == request.auth.uid || isTrainer());
+      allow update, delete: if isOwnerAdmin();
+    }
+
+    match /workoutLogs/{docId} {
+      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
+      allow create: if isAuthenticated() && (isAssignedTrainer(request.resource.data.clientId) || request.resource.data.clientId == request.auth.uid);
+      allow update, delete: if isAssignedTrainer(resource.data.clientId) || (isAuthenticated() && resource.data.clientId == request.auth.uid);
+    }
+
+    match /pendingDrafts/{docId} {
+      allow read: if isAuthenticated() && (isTrainer() || resource.data.clientId == request.auth.uid);
       allow create, update, delete: if isTrainer();
     }
 
-    // Messages rules
+    match /favorites/{docId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isTrainer());
+      allow create: if isAuthenticated() && (request.resource.data.uid == request.auth.uid || isTrainer());
+      allow update, delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isTrainer());
+    }
+
+    match /progressPhotos/{docId} {
+      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
+      allow create: if isAuthenticated() && (isAssignedTrainer(request.resource.data.clientId) || request.resource.data.clientId == request.auth.uid);
+      allow update, delete: if isAssignedTrainer(resource.data.clientId) || (isAuthenticated() && resource.data.clientId == request.auth.uid);
+    }
+
     match /messages/{docId} {
       allow read: if isAuthenticated() && (request.auth.uid in resource.data.participants || isTrainer());
-      allow create: if isAuthenticated() && isValidMessage(request.resource.data) &&
-                    (request.auth.uid == request.resource.data.senderId || isTrainer() ||
-                     (request.resource.data.senderId == 'SYSTEM' && request.resource.data.receiverId == request.auth.uid));
+      allow create: if isAuthenticated() && (
+        request.auth.uid == request.resource.data.senderId || isTrainer() ||
+        (request.resource.data.senderId == 'SYSTEM' && request.resource.data.receiverId == request.auth.uid)
+      );
       allow update: if isAuthenticated() && (request.auth.uid in resource.data.participants || isTrainer());
       allow delete: if isTrainer();
     }
 
     match /rescheduleRequests/{docId} {
       allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
-      allow create: if isAuthenticated() && (isTrainer() || request.resource.data.clientId == request.auth.uid);
-      allow update: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
-      allow delete: if isTrainer();
-    }
-
-    match /sessions/{docId} {
-      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
-      allow create, update, delete: if isTrainer();
-    }
-
-    match /dietPlans/{docId} {
-      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
-      allow create, update, delete: if isTrainer();
-    }
-
-    match /pendingDrafts/{docId} {
-      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
-      allow create, update, delete: if isTrainer();
-    }
-
-    match /paymentRecords/{docId} {
-      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
-      allow create, update, delete: if isTrainer();
-    }
-
-    match /favorites/{docId} {
-      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isTrainer());
-      allow create, update, delete: if isAuthenticated() && (request.resource.data.uid == request.auth.uid || isTrainer());
-    }
-
-    match /progressPhotos/{docId} {
-      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
-      allow create: if isAuthenticated() && (isTrainer() || request.resource.data.clientId == request.auth.uid);
-      allow update, delete: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
+      allow create: if isAuthenticated() && (isAssignedTrainer(request.resource.data.clientId) || request.resource.data.clientId == request.auth.uid);
+      allow update: if isAssignedTrainer(resource.data.clientId) || (isAuthenticated() && resource.data.clientId == request.auth.uid);
+      allow delete: if isAssignedTrainer(resource.data.clientId);
     }
 
     match /scheduledWorkouts/{docId} {
       allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
-      allow create, update, delete: if isTrainer();
+      allow create, update, delete: if isAssignedTrainer(request.resource.data.clientId);
     }
 
     match /workoutTemplates/{docId} {
-      allow read: if isTrainer() && (resource.data.trainerId == request.auth.uid);
-      allow create: if isTrainer() && (request.resource.data.trainerId == request.auth.uid);
-      allow update: if isTrainer() && (resource.data.trainerId == request.auth.uid);
-      allow delete: if isTrainer() && (resource.data.trainerId == request.auth.uid);
+      allow read, create, update, delete: if isTrainer() && (resource == null || resource.data.trainerId == request.auth.uid || isOwnerAdmin());
     }
 
     match /healthAssessments/{docId} {
-      allow read: if isAuthenticated() && (isTrainer() || resource.data.clientId == request.auth.uid);
-      allow create: if isAuthenticated() && (isTrainer() || incoming().clientId == request.auth.uid) && isValidHealthAssessment(incoming());
-      allow update: if isAuthenticated() && (isTrainer() || resource.data.clientId == request.auth.uid) && isValidHealthAssessment(incoming());
-      allow delete: if isTrainer();
+      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
+      allow create, update: if isAuthenticated() && (isAssignedTrainer(request.resource.data.clientId) || request.resource.data.clientId == request.auth.uid);
+      allow delete: if isOwnerAdmin();
     }
 
     match /fitnessAssessments/{docId} {
-      allow read: if isAuthenticated() && (isTrainer() || resource.data.clientId == request.auth.uid);
-      allow create: if isAuthenticated() && (isTrainer() || incoming().clientId == request.auth.uid) && isValidFitnessAssessment(incoming());
-      allow update: if isAuthenticated() && (isTrainer() || resource.data.clientId == request.auth.uid) && isValidFitnessAssessment(incoming());
-      allow delete: if isTrainer();
+      allow read: if isTrainer() || (isAuthenticated() && resource.data.clientId == request.auth.uid);
+      allow create, update: if isAuthenticated() && (isAssignedTrainer(request.resource.data.clientId) || request.resource.data.clientId == request.auth.uid);
+      allow delete: if isOwnerAdmin();
     }
 
     match /testimonials/{docId} {
       allow read: if isAuthenticated();
-      allow create, delete: if isTrainer() && isValidTestimonial(incoming());
-      allow update: if isTrainer() && isValidTestimonial(incoming());
+      allow create, update, delete: if isTrainer();
+    }
+
+    match /leadSubmissions/{docId} {
+      allow read, create, update, delete: if isTrainer();
     }
   }
 }

@@ -1253,7 +1253,7 @@ export const exportAITransformationReportToPDF = async (client: User, draft: any
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
     doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
-    doc.text('AI TRANSFORMATION COACH EXTRAPOSITED RECOMMENDATIONS SUMMARY', 18, currentY + 4.5);
+    doc.text('TRANSFORMATION SPECIALIST RECOMMENDATIONS SUMMARY', 18, currentY + 4.5);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.5);

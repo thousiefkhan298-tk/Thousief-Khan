@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Layout from '../../components/Layout';
 import { Plus, Trash2, Edit2, FileText, Save, ArrowLeft, Play, X, Video } from 'lucide-react';
 import { firebaseService } from '../../services/firebaseService';
 import { WorkoutTemplate, WorkoutTemplateEntry, User } from '../../types';
@@ -9,6 +11,7 @@ interface WorkoutTemplatesProps {
 }
 
 const WorkoutTemplates: React.FC<WorkoutTemplatesProps> = ({ user }) => {
+  const navigate = useNavigate();
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<WorkoutTemplate | null>(null);
@@ -70,22 +73,36 @@ const WorkoutTemplates: React.FC<WorkoutTemplatesProps> = ({ user }) => {
   };
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <button onClick={() => window.history.back()} className="flex items-center space-x-2 text-white mb-6">
-        <ArrowLeft className="w-5 h-5"/>
-        <span>Go Back</span>
-      </button>
-
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-white uppercase italic">Workout Templates</h1>
+    <Layout userData={user}>
+      <div className="p-4 sm:p-6 md:p-8 max-w-5xl mx-auto space-y-6">
         <button 
-          onClick={() => { resetForm(); setShowForm(true); }}
-          className="bg-brand-red text-white px-4 py-2 rounded-xl"
+          onClick={() => {
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate('/dashboard?tab=workouts');
+            }
+          }} 
+          aria-label="Go back"
+          className="flex items-center space-x-2 text-white hover:text-brand-red transition-colors min-h-[44px] py-2 px-1 focus-visible:ring-2 focus-visible:ring-brand-red focus:outline-none rounded-lg"
         >
-          <Plus className="inline w-5 h-5 mr-2" />
-          Add Template
+          <ArrowLeft className="w-4 h-4 text-brand-red"/>
+          <span className="text-xs">Back to workout plans</span>
         </button>
-      </div>
+
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-display uppercase tracking-wider text-white">Workout Templates</h1>
+            <p className="text-xs text-gray-400 font-mono mt-1">Reusable exercise blueprints for custom workouts</p>
+          </div>
+          <button 
+            onClick={() => { resetForm(); setShowForm(true); }}
+            className="bg-brand-red hover:bg-red-700 text-white px-4 py-2.5 min-h-[44px] rounded-xl text-xs font-semibold flex items-center shadow-md active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-white focus:outline-none"
+          >
+            <Plus className="w-4 h-4 mr-1.5" />
+            <span>Add template</span>
+          </button>
+        </div>
 
       {showForm && (
         <form onSubmit={handleSave} className="bg-neutral-800 border border-neutral-700 p-6 rounded-2xl mb-8">
@@ -148,7 +165,8 @@ const WorkoutTemplates: React.FC<WorkoutTemplatesProps> = ({ user }) => {
         exercises={currentWorkoutExercises}
         planContent="Template execution."
       />
-    </div>
+      </div>
+    </Layout>
   );
 };
 

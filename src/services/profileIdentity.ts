@@ -32,6 +32,12 @@ export function buildClaimProfile(
     email: email.trim().toLowerCase(),
     role: resolveRole(email),
   };
+  // Current profile data takes priority over placeholder, and placeholder takes priority over defaults
+  if (existing.trainerId) {
+    merged.trainerId = existing.trainerId;
+  } else if (placeholder.trainerId) {
+    merged.trainerId = placeholder.trainerId;
+  }
   delete merged.password;
   delete merged.assignedPassword;
   delete merged.passwordHash;

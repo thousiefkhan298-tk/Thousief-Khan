@@ -2,9 +2,35 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>
+      (function() {
+        if (typeof window !== 'undefined' && typeof console !== 'undefined' && console.error) {
+          var origError = console.error;
+          console.error = function() {
+            var args = Array.prototype.slice.call(arguments);
+            var isSkewError = args.some(function(arg) {
+              if (typeof arg === 'string') {
+                return arg.indexOf('Detected an update time that is in the future') !== -1;
+              }
+              if (arg && typeof arg.message === 'string') {
+                return arg.message.indexOf('Detected an update time that is in the future') !== -1;
+              }
+              return false;
+            });
+            if (isSkewError) {
+              if (console.debug) {
+                console.debug.apply(console, args);
+              }
+              return;
+            }
+            return origError.apply(console, args);
+          };
+        }
+      })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#000000">
+    <meta name="theme-color" content="#0D0D0F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Build to Transform">
@@ -13,29 +39,32 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Cpath d='M30 40H65L62 48H50L43 80H33L40 48H30V40Z' fill='%23dc2626'/%3E%3Cpath d='M47 57L70 40H80L58 60L80 80H70L47 63V57Z' fill='white'/%3E%3C/svg%3E">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Cpath d='M30 40H65L62 48H50L43 80H33L40 48H30V40Z' fill='%23dc2626'/%3E%3Cpath d='M47 57L70 40H80L58 60L80 80H70L47 63V57Z' fill='white'/%3E%3C/svg%3E">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23DC2626'/%3E%3Cpath d='M30 40H65L62 48H50L43 80H33L40 48H30V40Z' fill='white'/%3E%3Cpath d='M47 57L70 40H80L58 60L80 80H70L47 63V57Z' fill='white'/%3E%3C/svg%3E">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23DC2626'/%3E%3Cpath d='M30 40H65L62 48H50L43 80H33L40 48H30V40Z' fill='white'/%3E%3Cpath d='M47 57L70 40H80L58 60L80 80H70L47 63V57Z' fill='white'/%3E%3C/svg%3E">
     <link rel="manifest" href="/manifest.json">
     <title>Build to Transform</title>
+    <meta name="description" content="Build to Transform - A high-performance personal training platform managed by a single lead trainer with real-time recruit monitoring, mission-driven onboarding, and transformation tools.">
+    <meta property="og:title" content="Build to Transform">
+    <meta property="og:description" content="Build to Transform - A high-performance personal training platform managed by a single lead trainer with real-time recruit monitoring, mission-driven onboarding, and transformation tools.">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
       body {
         font-family: 'Inter', sans-serif;
-        background-color: #0A0A0A;
-        color: #FFFFFF;
+        background-color: #0D0D0F;
+        color: #F8FAFC;
       }
       h1, h2, h3, .brand-font {
         font-family: 'Oswald', sans-serif;
         text-transform: uppercase;
       }
       .bg-glass {
-        background: rgba(18, 18, 18, 0.9);
+        background: rgba(20, 20, 23, 0.85);
         backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.08);
       }
       .accent-glow {
-        box-shadow: 0 0 15px rgba(220, 38, 38, 0.3);
+        box-shadow: 0 0 20px rgba(220, 38, 38, 0.35);
       }
       @keyframes bounce-in {
         0% { transform: scale(0.3); opacity: 0; }

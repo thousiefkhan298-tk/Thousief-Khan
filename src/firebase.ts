@@ -1,21 +1,53 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer, enableIndexedDbPersistence } from 'firebase/firestore';
+import { 
+  initializeFirestore, 
+  doc, 
+  getDocFromServer, 
+  persistentLocalCache, 
+  persistentSingleTabManager,
+  Firestore
+} from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json' with { type: 'json' };
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
+// Filter internal clock-skew warnings from @firebase/firestore so they don't trigger the debug error panel
+if (typeof window !== 'undefined' && typeof console !== 'undefined' && console.error) {
+  const originalConsoleError = console.error;
+  console.error = function (...args: any[]) {
+    const isClockSkewError = args.some(arg => {
+      if (typeof arg === 'string') {
+        return arg.includes('Detected an update time that is in the future');
+      }
+      if (arg && typeof arg.message === 'string') {
+        return arg.message.includes('Detected an update time that is in the future');
+      }
+      return false;
+    });
 
-enableIndexedDbPersistence(db).catch((err) => {
-  if (err.code == 'failed-precondition') {
-      // Multiple tabs open, persistence can only be enabled in one
-      console.warn('Firebase persistence failed-precondition: Multiple tabs open');
-  } else if (err.code == 'unimplemented') {
-      // Browser doesn't support persistence
-      console.warn('Firebase persistence unimplemented: Browser does not support persistence');
-  }
-});
+    if (isClockSkewError) {
+      console.debug(...args);
+      return;
+    }
+    originalConsoleError.apply(console, args);
+  };
+}
+
+const app = initializeApp(firebaseConfig);
+const databaseId = (firebaseConfig as any).firestoreDatabaseId || '(default)';
+
+let firestoreInstance: Firestore;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentSingleTabManager({ forceOwnership: true })
+    })
+  }, databaseId);
+} catch (e) {
+  firestoreInstance = initializeFirestore(app, {}, databaseId);
+}
+
+export const db = firestoreInstance;
 
 export const auth = getAuth(app);
 export const storage = getStorage(app);
