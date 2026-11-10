@@ -554,15 +554,23 @@ const ClientDashboard: React.FC<Props> = ({ userData }) => {
     return pendingDrafts.find(d => d.status === 'approved') || null;
   }, [pendingDrafts]);
 
-  const activeWorkoutPlan = useMemo(() => {
-    const approvedPlans = workoutPlans.filter(p => p.approved === true);
-    return approvedPlans.length > 0 ? approvedPlans[0] : null;
+  const verifiedApprovedWorkouts = useMemo(() => {
+    return workoutPlans.filter(p => p.approved === true && p.approvalStatus !== 'draft' && p.approvalStatus !== 'revision' && !p.isDraft);
   }, [workoutPlans]);
 
-  const activeDietPlan = useMemo(() => {
-    const approvedPlans = dietPlans.filter(p => p.approved === true);
-    return approvedPlans.length > 0 ? approvedPlans[0] : null;
+  const activeWorkoutPlan = useMemo(() => {
+    const unarchived = verifiedApprovedWorkouts.filter(p => !p.isArchived);
+    return unarchived.length > 0 ? unarchived[0] : null;
+  }, [verifiedApprovedWorkouts]);
+
+  const verifiedApprovedDietPlans = useMemo(() => {
+    return dietPlans.filter(p => p.approved === true && p.approvalStatus !== 'draft' && p.approvalStatus !== 'revision' && !p.isDraft);
   }, [dietPlans]);
+
+  const activeDietPlan = useMemo(() => {
+    const unarchived = verifiedApprovedDietPlans.filter(p => !p.isArchived);
+    return unarchived.length > 0 ? unarchived[0] : null;
+  }, [verifiedApprovedDietPlans]);
 
   // Render health calculations
   const healthMetrics = useMemo(() => {
@@ -622,6 +630,11 @@ const ClientDashboard: React.FC<Props> = ({ userData }) => {
   }, [recentLogs, userData]);
 
   const handleWorkoutCompletionClick = async () => {
+    if (!activeWorkoutPlan) {
+      alert("Your workout routine is awaiting review and approval by your trainer. You cannot log workouts until approved.");
+      return;
+    }
+
     if (completedWorkoutToday) {
       alert("Workout already logged for today!");
       return;
@@ -632,7 +645,7 @@ const ClientDashboard: React.FC<Props> = ({ userData }) => {
       const newLog = {
         clientId: userData.uid,
         date: new Date().toISOString(),
-        title: activeWorkoutPlan?.title || "EMS Strength Recomposition",
+        title: activeWorkoutPlan.title,
         duration: "45 mins",
         notes: "Completed daily physical prescription guidelines completely.",
         entries: [
@@ -656,6 +669,11 @@ const ClientDashboard: React.FC<Props> = ({ userData }) => {
   };
 
   const handleMarkWorkoutCompleteSequence = async () => {
+    if (!activeWorkoutPlan) {
+      alert("Your workout routine is awaiting review and approval by your trainer. You cannot log workouts until approved.");
+      return;
+    }
+
     if (completedWorkoutToday) {
       alert("Workout already logged for today!");
       return;
@@ -669,7 +687,7 @@ const ClientDashboard: React.FC<Props> = ({ userData }) => {
       const newLog = {
         clientId: userData.uid,
         date: new Date().toISOString(),
-        title: activeWorkoutPlan?.title || "EMS Strength Recomposition",
+        title: activeWorkoutPlan.title,
         duration: "45 mins",
         notes: "Completed customized high-fidelity physical guidelines with high compliance.",
         entries: segmentsToSave.length > 0 ? segmentsToSave : [
@@ -909,9 +927,9 @@ const ClientDashboard: React.FC<Props> = ({ userData }) => {
       {(currentTab === 'myplan' || currentTab === 'workout' || currentTab === 'diet') && (
         <ClientMyPlanView
           activeWorkoutPlan={activeWorkoutPlan}
-          workoutPlans={workoutPlans}
+          workoutPlans={verifiedApprovedWorkouts}
           activeDietPlan={activeDietPlan}
-          dietPlans={dietPlans}
+          dietPlans={verifiedApprovedDietPlans}
           initialSubTab={searchParams.get('sub') === 'diet' || currentTab === 'diet' ? 'diet' : 'workout'}
         />
       )}

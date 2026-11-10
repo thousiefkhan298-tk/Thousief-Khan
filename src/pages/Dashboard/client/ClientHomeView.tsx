@@ -226,8 +226,8 @@ export const ClientHomeView: React.FC<ClientHomeViewProps> = ({
               </div>
             ) : (
               <div className="py-4 text-center space-y-1">
-                <p className="text-sm font-bold text-white">Your trainer has not assigned a workout yet.</p>
-                <p className="text-xs text-neutral-500 font-mono">Your custom routine will appear here once published by your coach.</p>
+                <p className="text-sm font-bold text-white">Workout Pending Coach Approval</p>
+                <p className="text-xs text-neutral-400 font-mono">Your trainer is reviewing your intake assessment. Your workout routine will be unlocked once approved.</p>
               </div>
             )}
           </div>

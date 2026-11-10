@@ -9,10 +9,11 @@
     "start": "tsx server.ts",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
-    "test": "node scripts/test-dashboard.mjs && node scripts/test-navigation.mjs && tsx scripts/test-leads.mjs",
+    "test": "node scripts/test-dashboard.mjs && node scripts/test-navigation.mjs && tsx scripts/test-leads.mjs && node scripts/test-intake-approval.mjs",
     "test:dashboard": "node scripts/test-dashboard.mjs",
     "test:navigation": "node scripts/test-navigation.mjs",
-    "test:leads": "tsx scripts/test-leads.mjs"
+    "test:leads": "tsx scripts/test-leads.mjs",
+    "test:intake": "node scripts/test-intake-approval.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

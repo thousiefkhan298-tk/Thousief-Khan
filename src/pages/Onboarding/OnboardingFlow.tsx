@@ -98,7 +98,9 @@ const OnboardingFlow: React.FC<Props> = ({ user, userData }) => {
         fitnessAssessment,
         medicalAssessment,
         dietPreferences,
-        termsConsent
+        termsConsent,
+        name: clientDetails.fullName || userData?.name || 'Athlete',
+        phoneNumber: clientDetails.phoneNumber || userData?.phoneNumber || ''
       };
       await firebaseService.saveOnboardingProgress(user.uid, nextStepNumber, payload);
     } catch (err) {
@@ -126,7 +128,10 @@ const OnboardingFlow: React.FC<Props> = ({ user, userData }) => {
     setLoading(true);
     try {
       await firebaseService.submitOnboarding(user.uid, {
-        clientDetails,
+        clientDetails: {
+          ...clientDetails,
+          email: user?.email || clientDetails.email || ''
+        },
         fitnessAssessment,
         medicalAssessment,
         dietPreferences,
@@ -136,7 +141,8 @@ const OnboardingFlow: React.FC<Props> = ({ user, userData }) => {
           acceptedAt: new Date().toISOString(),
           termsVersion: '2.5'
         },
-        name: clientDetails.fullName || userData?.name || 'Athlete'
+        name: clientDetails.fullName || userData?.name || 'Athlete',
+        phoneNumber: clientDetails.phoneNumber || userData?.phoneNumber || ''
       });
 
       // Clear draft flag and navigate to dashboard

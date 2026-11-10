@@ -4,18 +4,24 @@ import { firebaseService } from '../services/firebaseService';
 import { Edit2, Save, X, Plus, Trash2, CheckCircle, Activity, Heart, Ruler, ClipboardList, Target, ChevronRight, Info } from 'lucide-react';
 import { format } from 'date-fns';
 
+import { ClientAssessmentModal } from './ClientAssessmentModal';
+import { AlertTriangle, Clock, Shield, Utensils, User, FileText, ExternalLink, RotateCcw } from 'lucide-react';
+
 interface AssessmentsSectionProps {
   clientId: string;
   isTrainer: boolean;
   healthDoc: any;
   fitnessDoc: any;
+  clientDoc?: any;
 }
 
 const emptyScore = (): MovementScreenScore => ({ raw: '', final: '', comments: '' });
 
-const AssessmentsSection: React.FC<AssessmentsSectionProps> = ({ clientId, isTrainer, healthDoc, fitnessDoc }) => {
+const AssessmentsSection: React.FC<AssessmentsSectionProps> = ({ clientId, isTrainer, healthDoc, fitnessDoc, clientDoc }) => {
   const [isEditingHealth, setIsEditingHealth] = useState(false);
   const [isEditingFitness, setIsEditingFitness] = useState(false);
+  const [showIntakeModal, setShowIntakeModal] = useState(false);
+  const [isReopening, setIsReopening] = useState(false);
   
   const [healthForm, setHealthForm] = useState<Partial<HealthAssessment>>({});
   const [fitnessForm, setFitnessForm] = useState<Partial<FitnessAssessment>>({});
@@ -582,8 +588,271 @@ const AssessmentsSection: React.FC<AssessmentsSectionProps> = ({ clientId, isTra
     );
   };
 
+  const renderClientOnboardingDossier = () => {
+    if (!clientDoc) return null;
+
+    const details = clientDoc.clientDetails || {};
+    const fitness = clientDoc.fitnessAssessment || {};
+    const medical = clientDoc.medicalAssessment || {};
+    const diet = clientDoc.dietPreferences || {};
+    const terms = clientDoc.termsConsent || {};
+
+    const height = fitness.height || '--';
+    const weight = fitness.weight || '--';
+    let bmi: number | null = null;
+    let bmiCategory = '';
+    if (height && weight && Number(height) > 0 && Number(weight) > 0) {
+      const hM = Number(height) / 100;
+      bmi = Number((Number(weight) / (hM * hM)).toFixed(1));
+      if (bmi < 18.5) bmiCategory = 'Underweight';
+      else if (bmi < 24.9) bmiCategory = 'Normal';
+      else if (bmi < 29.9) bmiCategory = 'Overweight';
+      else bmiCategory = 'Obese';
+    }
+
+    const hasConditions = medical.conditions && medical.conditions.length > 0;
+    const hasInjuries = Boolean(medical.injuriesOrSurgeries && medical.injuriesOrSurgeries.trim());
+    const hasPain = medical.painOrRestrictions && medical.painOrRestrictions.some((p: string) => p !== 'None');
+    const hasMeds = Boolean(medical.medications && medical.medications.trim());
+    const hasDocRestrictions = Boolean(medical.doctorRestrictions && medical.doctorRestrictions.trim());
+    const isMedicallyFlagged = medical.flaggedForReview || hasConditions || hasInjuries || hasPain || hasDocRestrictions;
+
+    const hasAnyIntakeData = Boolean(
+      clientDoc.onboardingCompleted ||
+      clientDoc.clientDetails ||
+      clientDoc.fitnessAssessment ||
+      clientDoc.medicalAssessment ||
+      clientDoc.dietPreferences ||
+      clientDoc.termsConsent
+    );
+
+    const handleReopen = async () => {
+      if (!confirm(`Reopen intake assessment for ${clientDoc.name || 'this client'}? They will be prompted to update their intake answers on their next login.`)) return;
+      setIsReopening(true);
+      try {
+        await firebaseService.setAssessmentReopened(clientId, true);
+        alert('Intake assessment reopened. Client will see the intake form upon next login.');
+      } catch (err) {
+        console.error(err);
+        alert('Failed to reopen assessment.');
+      } finally {
+        setIsReopening(false);
+      }
+    };
+
+    return (
+      <div className="bg-[#141417] border-2 border-brand-red/30 rounded-[2.5rem] p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden">
+        {/* Top Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#26262B] pb-6">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-mono text-brand-red font-bold uppercase tracking-wider bg-red-950/40 border border-red-900/40 px-2.5 py-0.5 rounded">
+                Client Intake Assessment (Filled at Login)
+              </span>
+              {clientDoc.onboardingCompleted ? (
+                <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded font-bold flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" /> Submitted {clientDoc.onboardingSubmittedAt ? format(new Date(clientDoc.onboardingSubmittedAt), 'MMM dd, yyyy') : 'Complete'}
+                </span>
+              ) : hasAnyIntakeData ? (
+                <span className="text-[10px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded font-bold flex items-center gap-1">
+                  <Clock className="w-3 h-3" /> Partially Saved (Step {clientDoc.onboardingStep || 1} of 5)
+                </span>
+              ) : (
+                <span className="text-[10px] font-mono bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2.5 py-0.5 rounded font-bold flex items-center gap-1">
+                  <Clock className="w-3 h-3" /> Not Yet Started by Client
+                </span>
+              )}
+              {isMedicallyFlagged && (
+                <span className="text-[10px] font-mono bg-rose-500/20 text-rose-400 border border-rose-500/40 px-2.5 py-0.5 rounded font-bold flex items-center gap-1 animate-pulse">
+                  <AlertTriangle className="w-3 h-3" /> Medical Review Required
+                </span>
+              )}
+            </div>
+            <h3 className="text-2xl font-display italic font-bold uppercase tracking-wider text-white">
+              {details.fullName || clientDoc.name || 'Client Intake Dossier'}
+            </h3>
+            <p className="text-xs font-mono text-slate-400">
+              Submitted answers recorded during client initial login & onboarding.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={() => setShowIntakeModal(true)}
+              className="px-4 py-2.5 bg-brand-red hover:bg-red-700 text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg active:scale-95 cursor-pointer"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Open Full Intake Dossier</span>
+            </button>
+            {isTrainer && (
+              <button
+                onClick={handleReopen}
+                disabled={isReopening}
+                className="px-3.5 py-2.5 bg-[#18181C] hover:bg-[#222228] border border-[#26262B] text-slate-300 hover:text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                title="Prompt client to update their answers upon next login"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 text-brand-red ${isReopening ? 'animate-spin' : ''}`} />
+                <span>Reopen Form</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 4 Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          
+          {/* Card 1: Demographics */}
+          <div className="bg-[#0D0D0F] border border-[#26262B] rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-2 text-brand-red font-mono text-xs font-bold uppercase tracking-wider border-b border-[#26262B] pb-2">
+              <User className="w-3.5 h-3.5" />
+              <span>Demographics</span>
+            </div>
+            <div className="space-y-1.5 text-xs font-mono">
+              <div className="flex justify-between text-slate-400">
+                <span>DOB / Gender:</span>
+                <span className="text-white font-bold">{details.dob || '--'} ({details.gender || '--'})</span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Phone:</span>
+                <span className="text-white font-bold">{details.phoneNumber || clientDoc.phoneNumber || '--'}</span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Occupation:</span>
+                <span className="text-white truncate max-w-[120px]">{details.occupation || '--'}</span>
+              </div>
+              <div className="pt-2 border-t border-[#1C1C22]">
+                <span className="text-[9px] text-slate-500 uppercase block">Emergency Contact</span>
+                <p className="text-white font-bold text-[11px] truncate">{details.emergencyContactName || '--'} ({details.emergencyContactRelation || '--'})</p>
+                <p className="text-brand-red text-[10px]">{details.emergencyContactPhone || '--'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Fitness & Biometrics */}
+          <div className="bg-[#0D0D0F] border border-[#26262B] rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-2 text-brand-red font-mono text-xs font-bold uppercase tracking-wider border-b border-[#26262B] pb-2">
+              <Ruler className="w-3.5 h-3.5" />
+              <span>Biometrics & Fitness</span>
+            </div>
+            <div className="space-y-1.5 text-xs font-mono">
+              <div className="grid grid-cols-3 gap-2 py-1 text-center bg-[#141417] rounded-lg border border-[#26262B]">
+                <div>
+                  <span className="text-[8px] text-slate-500 uppercase block">Height</span>
+                  <span className="text-white font-bold text-xs">{height} <span className="text-[8px] text-slate-400 font-normal">cm</span></span>
+                </div>
+                <div>
+                  <span className="text-[8px] text-slate-500 uppercase block">Weight</span>
+                  <span className="text-white font-bold text-xs">{weight} <span className="text-[8px] text-slate-400 font-normal">kg</span></span>
+                </div>
+                <div>
+                  <span className="text-[8px] text-slate-500 uppercase block">BMI</span>
+                  <span className={`font-bold text-xs ${bmi && bmi > 25 ? 'text-amber-400' : 'text-emerald-400'}`}>{bmi || '--'}</span>
+                </div>
+              </div>
+              <div className="flex justify-between text-slate-400 text-[11px] pt-1">
+                <span>Experience:</span>
+                <span className="text-white font-bold">{fitness.trainingExperience || '--'}</span>
+              </div>
+              <div className="flex justify-between text-slate-400 text-[11px]">
+                <span>Activity Level:</span>
+                <span className="text-white font-bold">{fitness.currentActivityLevel || '--'}</span>
+              </div>
+              <div className="pt-1.5 border-t border-[#1C1C22]">
+                <span className="text-[9px] text-slate-500 uppercase block">Equipment Access</span>
+                <p className="text-white text-[11px] truncate">{Array.isArray(fitness.equipmentAccess) ? fitness.equipmentAccess.join(', ') : (fitness.equipmentAccess || 'Full Gym')}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Medical & PAR-Q */}
+          <div className="bg-[#0D0D0F] border border-[#26262B] rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between border-b border-[#26262B] pb-2">
+              <div className="flex items-center gap-2 text-brand-red font-mono text-xs font-bold uppercase tracking-wider">
+                <Heart className="w-3.5 h-3.5" />
+                <span>Medical Clearance</span>
+              </div>
+              {isMedicallyFlagged ? (
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+              ) : (
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              )}
+            </div>
+            <div className="space-y-1.5 text-xs font-mono">
+              <div className="flex justify-between text-slate-400">
+                <span>Conditions:</span>
+                <span className={hasConditions ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+                  {hasConditions ? medical.conditions.join(', ') : 'None Reported'}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Injuries / Surgeries:</span>
+                <span className={hasInjuries ? 'text-rose-400 font-bold truncate max-w-[110px]' : 'text-slate-300'}>
+                  {medical.injuriesOrSurgeries || 'None'}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Joint / Pain Areas:</span>
+                <span className={hasPain ? 'text-amber-400 font-bold truncate max-w-[110px]' : 'text-slate-300'}>
+                  {Array.isArray(medical.painOrRestrictions) ? medical.painOrRestrictions.join(', ') : (medical.painOrRestrictions || 'None')}
+                </span>
+              </div>
+              <div className="pt-1.5 border-t border-[#1C1C22]">
+                <span className="text-[9px] text-slate-500 uppercase block">Medications / Allergies</span>
+                <p className="text-white text-[10px] truncate">{medical.medications || 'None'} {medical.allergies ? `• ${medical.allergies}` : ''}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 4: Nutrition & Consent */}
+          <div className="bg-[#0D0D0F] border border-[#26262B] rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-2 text-brand-red font-mono text-xs font-bold uppercase tracking-wider border-b border-[#26262B] pb-2">
+              <Utensils className="w-3.5 h-3.5" />
+              <span>Nutrition & Consent</span>
+            </div>
+            <div className="space-y-1.5 text-xs font-mono">
+              <div className="flex justify-between text-slate-400">
+                <span>Diet Preference:</span>
+                <span className="text-white font-bold">{diet.dietType || '--'}</span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Water Intake:</span>
+                <span className="text-white">{diet.dailyWaterIntake || '--'}</span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Meals / Day:</span>
+                <span className="text-white">{diet.mealsPerDay || '--'}</span>
+              </div>
+              <div className="pt-1.5 border-t border-[#1C1C22]">
+                <span className="text-[9px] text-slate-500 uppercase block">Digital PAR-Q Signature</span>
+                <p className="text-emerald-400 font-bold text-[11px] truncate">
+                  ✓ {terms.signatureName || clientDoc.name || 'Signed on File'}
+                </p>
+                <p className="text-[9px] text-slate-500">
+                  {terms.timestamp ? format(new Date(terms.timestamp), 'MMM dd, yyyy • hh:mm a') : 'Consent Recorded'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Modal display when clicked */}
+        {showIntakeModal && (
+          <ClientAssessmentModal
+            client={clientDoc}
+            onClose={() => setShowIntakeModal(false)}
+            onReopenAssessment={async (cId) => {
+              await firebaseService.setAssessmentReopened(cId, true);
+            }}
+          />
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-12">
+      {renderClientOnboardingDossier()}
       {renderHealthAssessment()}
       {renderFitnessAssessment()}
     </div>

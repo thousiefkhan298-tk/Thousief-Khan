@@ -37,7 +37,11 @@ service cloud.firestore {
          isOwnerAdmin() ||
          (request.auth.token.email != null && isTrainerEmail(request.auth.token.email)) ||
          request.auth.uid == 'Wr3ZaCCtFkM5IuAHUFsZznq973h2' ||
-         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'TRAINER')
+         ('role' in request.auth.token && (request.auth.token.role == 'TRAINER' || request.auth.token.role == 'trainer')) ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'TRAINER' ||
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'trainer'
+         ))
        );
     }
 
@@ -49,7 +53,9 @@ service cloud.firestore {
           !exists(/databases/$(database)/documents/users/$(clientId)) ||
           !('trainerId' in get(/databases/$(database)/documents/users/$(clientId)).data) ||
           get(/databases/$(database)/documents/users/$(clientId)).data.trainerId == null ||
-          get(/databases/$(database)/documents/users/$(clientId)).data.trainerId == request.auth.uid
+          get(/databases/$(database)/documents/users/$(clientId)).data.trainerId == request.auth.uid ||
+          (request.auth.token.email != null && get(/databases/$(database)/documents/users/$(clientId)).data.trainerId == request.auth.token.email.lower()) ||
+          get(/databases/$(database)/documents/users/$(clientId)).data.trainerId == 'thousiefkhan298@gmail.com'
         ))
       );
     }

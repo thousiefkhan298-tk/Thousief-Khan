@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase.js';
+import { TRAINER_EMAILS } from '../constants';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -72,7 +73,7 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
     return (localStorage.getItem('theme-mode') as any) || 'red-and-black';
   });
 
-  const isTrainer = userData?.role === 'TRAINER';
+  const isTrainer = userData?.role === 'TRAINER' || (userData?.email && TRAINER_EMAILS.some(e => e.toLowerCase() === userData.email.toLowerCase()));
   const currentTab = searchParams.get('tab') || (isTrainer ? 'dashboard' : 'home');
 
   useEffect(() => {
@@ -114,6 +115,7 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
   const trainerDailyTabs = [
     { name: 'Home', tab: 'dashboard', icon: Activity },
     { name: 'Clients', tab: 'clients', icon: Users },
+    { name: 'Assessments', tab: 'assessments', icon: ClipboardList },
     { name: 'Sessions', tab: 'calendar', icon: Calendar },
     { name: 'Plans', tab: 'workouts', icon: Dumbbell },
     { name: 'Payments', tab: 'payments', icon: CreditCard },
@@ -141,6 +143,7 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
     if (isTrainer) {
       if (tabKey === 'dashboard') return currentTab === 'dashboard' || !currentTab;
       if (tabKey === 'clients') return currentTab === 'clients';
+      if (tabKey === 'assessments') return currentTab === 'assessments';
       if (tabKey === 'calendar') return currentTab === 'calendar' || currentTab === 'sessions';
       if (tabKey === 'workouts') return currentTab === 'workouts' || currentTab === 'dietplans' || currentTab === 'plans';
       if (tabKey === 'payments') return currentTab === 'payments' || currentTab === 'accounts';
@@ -177,6 +180,7 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
       switch (currentTab) {
         case 'dashboard': return 'Home';
         case 'clients': return 'Clients';
+        case 'assessments': return 'Client Intake Assessments';
         case 'calendar':
         case 'sessions': return 'Sessions';
         case 'workouts':

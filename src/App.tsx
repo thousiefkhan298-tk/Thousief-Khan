@@ -109,13 +109,15 @@ const App: React.FC = () => {
         }
         clearTimer();
         setProfileError('');
+        const profileData = docSnap.data() || {};
+        const isTrainerUser = profileData.role === 'TRAINER' || resolveRole(firebaseUser.email) === 'TRAINER';
         setUser({
           ...firebaseUser,
-          ...docSnap.data(),
+          ...profileData,
           uid: firebaseUser.uid,
           id: firebaseUser.uid,
           email: firebaseUser.email,
-          role: resolveRole(firebaseUser.email),
+          role: isTrainerUser ? 'TRAINER' : 'CLIENT',
         });
         setLoading(false);
       }, (error) => {

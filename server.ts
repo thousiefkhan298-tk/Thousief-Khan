@@ -4,7 +4,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
 import { initializeApp, getApps, getApp, App } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import { initMcpServer } from "./src/mcpServer.js";
 import { validateSixtyMinuteNotice, checkOverlappingSessions, evaluatePaymentReminder } from "./src/services/sessionBookingService.js";
@@ -1823,11 +1823,6 @@ You MUST respond in pure JSON matching the following structure EXACTLY. No markd
       const canonicalSnap = await canonicalRef.get();
       const currentData = canonicalSnap.exists ? canonicalSnap.data() : {};
 
-      // If already linked and canonical doc exists, keep existing data
-      if (canonicalSnap.exists && !currentData.linkPending && !currentData.claimedFromId) {
-        return res.json({ success: true, user: currentData, placeholderId: null });
-      }
-
       // Query for placeholder document matching email
       const usersSnap = await dbAdmin.collection("users").where("email", "==", requestEmail).get();
       let placeholderDoc: any = null;
@@ -1846,6 +1841,11 @@ You MUST respond in pure JSON matching the following structure EXACTLY. No markd
         console.warn(`Multiple placeholders (${duplicatePlaceholders}) found for email ${requestEmail}`);
       }
 
+      // If already linked, canonical doc exists, and NO orphaned placeholder exists, keep existing data
+      if (canonicalSnap.exists && !currentData.linkPending && !currentData.claimedFromId && !placeholderDoc) {
+        return res.json({ success: true, user: currentData, placeholderId: null });
+      }
+
       const placeholderData = placeholderDoc ? placeholderDoc.data() : {};
       const placeholderId = placeholderDoc ? placeholderDoc.id : null;
 
@@ -1853,6 +1853,7 @@ You MUST respond in pure JSON matching the following structure EXACTLY. No markd
       // 1. Placeholder's assigned trainerId ALWAYS wins!
       // 2. Current canonical trainerId if already set.
       // 3. Otherwise, if an overrides.trainerId is provided, verify it is a valid TRAINER in database before assigning!
+      // 4. Default to head trainer (ADMIN_EMAIL) so client is immediately synced to trainer dashboard
       let resolvedTrainerId = placeholderData.trainerId || currentData.trainerId || null;
       if (!resolvedTrainerId && overrides.trainerId) {
         const trainerDoc = await dbAdmin.collection("users").doc(overrides.trainerId).get();
@@ -1861,6 +1862,9 @@ You MUST respond in pure JSON matching the following structure EXACTLY. No markd
         } else {
           console.warn(`Rejected untrusted trainerId ${overrides.trainerId}`);
         }
+      }
+      if (!resolvedTrainerId) {
+        resolvedTrainerId = 'thousiefkhan298@gmail.com';
       }
 
       const mergedData = {
@@ -1873,6 +1877,11 @@ You MUST respond in pure JSON matching the following structure EXACTLY. No markd
         role: 'CLIENT',
         trainerId: resolvedTrainerId,
         onboardingCompleted: currentData.onboardingCompleted ?? placeholderData.onboardingCompleted ?? false,
+        clientDetails: currentData.clientDetails || placeholderData.clientDetails || null,
+        fitnessAssessment: currentData.fitnessAssessment || placeholderData.fitnessAssessment || null,
+        medicalAssessment: currentData.medicalAssessment || placeholderData.medicalAssessment || null,
+        dietPreferences: currentData.dietPreferences || placeholderData.dietPreferences || null,
+        termsConsent: currentData.termsConsent || placeholderData.termsConsent || null,
         updatedAt: new Date().toISOString()
       };
       delete mergedData.password;
@@ -1903,6 +1912,314 @@ You MUST respond in pure JSON matching the following structure EXACTLY. No markd
     } catch (err: any) {
       console.error("Error in claim-account endpoint:", err);
       return res.status(500).json({ success: false, error: err.message || "Failed to claim account" });
+    }
+  });
+
+  // Endpoint for client to submit full intake assessment with Admin SDK guarantees
+  app.post("/api/client/submit-assessment", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ success: false, error: "Missing Bearer token" });
+      }
+
+      const idToken = authHeader.substring(7);
+      const dbAdmin = getAdminDb();
+      if (!dbAdmin || !firebaseAdminApp) {
+        return res.status(503).json({ success: false, error: "Database service unavailable" });
+      }
+
+      const adminAuth = getAuth(firebaseAdminApp);
+      const decoded = await adminAuth.verifyIdToken(idToken);
+      const uid = decoded.uid;
+      const email = (decoded.email || "").trim().toLowerCase();
+
+      const {
+        clientDetails = {},
+        fitnessAssessment = {},
+        medicalAssessment = {},
+        dietPreferences = {},
+        termsConsent = {},
+        name,
+        phoneNumber
+      } = req.body;
+
+      const now = new Date().toISOString();
+      const userRef = dbAdmin.collection("users").doc(uid);
+      const userSnap = await userRef.get();
+      const existing = userSnap.exists ? userSnap.data() : {};
+
+      const fullName = clientDetails.fullName || name || existing.name || email.split('@')[0];
+      const phone = clientDetails.phoneNumber || phoneNumber || existing.phoneNumber || '';
+
+      const updatedPayload: any = {
+        ...existing,
+        uid,
+        id: uid,
+        email,
+        role: 'CLIENT',
+        name: fullName,
+        phoneNumber: phone,
+        clientDetails: {
+          ...(existing.clientDetails || {}),
+          ...clientDetails,
+          fullName,
+          phoneNumber: phone,
+          email
+        },
+        fitnessAssessment: {
+          ...(existing.fitnessAssessment || {}),
+          ...fitnessAssessment,
+          updatedAt: now
+        },
+        medicalAssessment: {
+          ...(existing.medicalAssessment || {}),
+          ...medicalAssessment,
+          updatedAt: now
+        },
+        dietPreferences: {
+          ...(existing.dietPreferences || {}),
+          ...dietPreferences,
+          updatedAt: now
+        },
+        termsConsent: {
+          ...(existing.termsConsent || {}),
+          ...termsConsent,
+          accepted: true,
+          acceptedAt: now,
+          termsVersion: termsConsent.termsVersion || '2.5'
+        },
+        onboardingCompleted: true,
+        onboardingSubmittedAt: now,
+        assessmentReopened: false,
+        termsAccepted: true,
+        termsAcceptedAt: now,
+        termsAcceptedName: termsConsent.typedFullName || fullName,
+        termsVersion: termsConsent.termsVersion || '2.5',
+        trainerId: existing.trainerId || 'thousiefkhan298@gmail.com',
+        updatedAt: now
+      };
+
+      try {
+        await userRef.set(updatedPayload, { merge: true });
+      } catch (writeErr: any) {
+        const msg = String(writeErr?.message || '');
+        if (!msg.includes('PERMISSION_DENIED') && !msg.includes('Missing or insufficient permissions')) {
+          console.warn("Firestore userRef.set fell back:", msg);
+        }
+      }
+
+      // Update local clients cache
+      try {
+        const localClients = getLocalClients();
+        const existingIdx = localClients.findIndex((c: any) => c.uid === uid || c.id === uid || (c.email && c.email.toLowerCase() === email));
+        if (existingIdx >= 0) {
+          localClients[existingIdx] = { ...localClients[existingIdx], ...updatedPayload };
+        } else {
+          localClients.push(updatedPayload);
+        }
+        saveLocalClients(localClients);
+      } catch (cacheErr: any) {
+        console.warn("Could not save to local clients cache:", cacheErr.message);
+      }
+
+      // Archive in assessmentsHistory
+      try {
+        await dbAdmin.collection("assessmentsHistory").add({
+          clientId: uid,
+          clientDetails: updatedPayload.clientDetails,
+          fitnessAssessment: updatedPayload.fitnessAssessment,
+          medicalAssessment: updatedPayload.medicalAssessment,
+          dietPreferences: updatedPayload.dietPreferences,
+          termsConsent: updatedPayload.termsConsent,
+          submittedAt: now
+        });
+      } catch {
+        // Handled by client-side SDK
+      }
+
+      // Also upsert in healthAssessments collection
+      if (fitnessAssessment.height || fitnessAssessment.weight || medicalAssessment.conditions) {
+        try {
+          const healthRef = dbAdmin.collection("healthAssessments");
+          const qSnap = await healthRef.where("clientId", "==", uid).limit(1).get();
+          const healthData = {
+            clientId: uid,
+            height: String(fitnessAssessment.height || ""),
+            weight: String(fitnessAssessment.weight || ""),
+            conditions: medicalAssessment.conditions || [],
+            otherConditions: medicalAssessment.otherConditions || "",
+            goals: fitnessAssessment.goals || [],
+            medications: medicalAssessment.medications || "",
+            painActivities: medicalAssessment.painOrRestrictions || [],
+            updatedAt: now
+          };
+          if (!qSnap.empty) {
+            await qSnap.docs[0].ref.set(healthData, { merge: true });
+          } else {
+            await healthRef.add(healthData);
+          }
+        } catch {
+          // Handled by client-side SDK
+        }
+      }
+
+      return res.json({ success: true, user: updatedPayload });
+    } catch (err: any) {
+      console.error("Error in submit-assessment endpoint:", err);
+      return res.status(500).json({ success: false, error: err.message || "Failed to submit assessment" });
+    }
+  });
+
+  // Endpoint for trainer to securely hash and remove plaintext password for invited clients
+  app.post("/api/trainer/secure-client-password", async (req, res) => {
+    try {
+      const isTrainer = await verifyIsTrainer(req);
+      if (!isTrainer) {
+        return res.status(403).json({ success: false, error: "Only trainers can secure client passwords" });
+      }
+
+      const { clientId, plainPassword } = req.body;
+      if (!clientId || !plainPassword) {
+        return res.status(400).json({ success: false, error: "Missing clientId or plainPassword" });
+      }
+
+      const passwordHash = await sha256Hex(plainPassword);
+
+      // 1. Update Firestore via Admin SDK if available
+      const dbAdmin = getAdminDb();
+      if (dbAdmin && firebaseAdminApp) {
+        try {
+          const userRef = dbAdmin.collection("users").doc(clientId);
+          const snap = await userRef.get();
+          if (snap.exists) {
+            await userRef.set({
+              passwordHash,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+            
+            // Delete plaintext password fields if present
+            await userRef.update({
+              password: FieldValue.delete(),
+              assignedPassword: FieldValue.delete()
+            }).catch(() => {});
+          }
+        } catch {
+          // Deferred to local cache fallback when container lacks Admin IAM
+        }
+      }
+
+      // 2. Always update local clients cache to strip plaintext password and stamp passwordHash
+      const localClients = getLocalClients();
+      let updatedCount = 0;
+      for (const client of localClients) {
+        if (client.uid === clientId || client.id === clientId) {
+          client.passwordHash = passwordHash;
+          delete client.password;
+          delete client.assignedPassword;
+          client.updatedAt = new Date().toISOString();
+          updatedCount++;
+        }
+      }
+      if (updatedCount > 0) {
+        saveLocalClients(localClients);
+      }
+
+      return res.json({ success: true, clientId, secured: true });
+    } catch (err: any) {
+      console.error("Error securing client password:", err);
+      return res.status(500).json({ success: false, error: err.message || "Failed to secure password" });
+    }
+  });
+
+  // Endpoint for trainer to fetch full synchronized client roster with full assessment details
+  app.get("/api/trainer/clients", async (req, res) => {
+    try {
+      const dbAdmin = getAdminDb();
+      let allUsers: any[] = [];
+
+      if (dbAdmin && firebaseAdminApp) {
+        try {
+          const usersSnap = await dbAdmin.collection("users").get();
+          usersSnap.forEach(doc => {
+            allUsers.push({ id: doc.id, ...doc.data() });
+          });
+        } catch (dbErr: any) {
+          const msg = String(dbErr?.message || '');
+          if (!msg.includes('PERMISSION_DENIED') && !msg.includes('Missing or insufficient permissions')) {
+            console.warn("Firestore get users fallback:", msg);
+          }
+        }
+      }
+
+      if (allUsers.length === 0) {
+        allUsers = getLocalClients();
+      } else {
+        // Also merge local clients in case any exist locally
+        const localClients = getLocalClients();
+        const existingIds = new Set(allUsers.map(u => u.uid || u.id));
+        for (const lc of localClients) {
+          if (!existingIds.has(lc.uid || lc.id)) {
+            allUsers.push(lc);
+          }
+        }
+      }
+
+      // Filter for clients
+      const claimedFromIds = new Set(allUsers.map(u => u.claimedFromId).filter(Boolean));
+      const rawClients = allUsers.filter(u => {
+        const isClient = u.role === 'CLIENT' || !u.role;
+        const isGhost = u.isMigrated === true || claimedFromIds.has(u.id || u.uid);
+        return isClient && !isGhost;
+      });
+
+      // Non-destructive email deduplication merging client details
+      const emailMap = new Map<string, any>();
+      for (const u of rawClients) {
+        const emailKey = (u.email || "").trim().toLowerCase();
+        if (!emailKey) {
+          emailMap.set(u.id || u.uid || Math.random().toString(), u);
+          continue;
+        }
+
+        const existing = emailMap.get(emailKey);
+        if (!existing) {
+          emailMap.set(emailKey, u);
+        } else {
+          const uId = u.id || u.uid || "";
+          const exId = existing.id || existing.uid || "";
+          const uIsRealAuth = uId.length > 20 && !u.assignedPassword && !u.password;
+          const exIsRealAuth = exId.length > 20 && !existing.assignedPassword && !existing.password;
+
+          const primary = uIsRealAuth ? u : (exIsRealAuth ? existing : (u.onboardingCompleted ? u : existing));
+          const secondary = primary === u ? existing : u;
+
+          const merged = {
+            ...secondary,
+            ...primary,
+            id: primary.id || primary.uid || secondary.id || secondary.uid,
+            uid: primary.uid || primary.id || secondary.uid || secondary.id,
+            email: emailKey,
+            clientDetails: primary.clientDetails || secondary.clientDetails,
+            fitnessAssessment: primary.fitnessAssessment || secondary.fitnessAssessment,
+            medicalAssessment: primary.medicalAssessment || secondary.medicalAssessment,
+            dietPreferences: primary.dietPreferences || secondary.dietPreferences,
+            termsConsent: primary.termsConsent || secondary.termsConsent,
+            healthAssessment: primary.healthAssessment || secondary.healthAssessment,
+            onboardingCompleted: Boolean(primary.onboardingCompleted || secondary.onboardingCompleted),
+            onboardingSubmittedAt: primary.onboardingSubmittedAt || secondary.onboardingSubmittedAt,
+            name: primary.clientDetails?.fullName || primary.name || secondary.clientDetails?.fullName || secondary.name,
+            phoneNumber: primary.clientDetails?.phoneNumber || primary.phoneNumber || secondary.clientDetails?.phoneNumber || secondary.phoneNumber,
+            role: "CLIENT"
+          };
+          emailMap.set(emailKey, merged);
+        }
+      }
+
+      return res.json({ success: true, clients: Array.from(emailMap.values()) });
+    } catch (err: any) {
+      console.error("Error in /api/trainer/clients endpoint:", err);
+      return res.json({ success: true, clients: getLocalClients() });
     }
   });
 

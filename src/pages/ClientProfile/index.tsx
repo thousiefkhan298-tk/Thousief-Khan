@@ -278,11 +278,27 @@ const ClientProfile: React.FC = () => {
         let clientData = await firebaseService.getUser(id);
         let targetId = id;
 
+        // Fallback to synchronized server roster if direct Firestore document is null
+        if (!clientData) {
+          try {
+            const resp = await fetch('/api/trainer/clients');
+            if (resp.ok) {
+              const json = await resp.json();
+              if (json.success && Array.isArray(json.clients)) {
+                const found = json.clients.find((c: any) => c.id === id || c.uid === id);
+                if (found) {
+                  clientData = found;
+                }
+              }
+            }
+          } catch {}
+        }
+
         // Handle pre-registration migration seamlessly
         if (clientData && (clientData as any).migratedTo) {
           const migratedId = (clientData as any).migratedTo;
           console.log(`Routing client profile page from transient ID ${id} to migrated authenticated ID ${migratedId}`);
-          clientData = await firebaseService.getUser(migratedId);
+          clientData = (await firebaseService.getUser(migratedId)) || clientData;
           targetId = migratedId;
           // Smoothly rewrite browser URL to refer to the actual authenticated UID
           window.history.replaceState(null, '', `/client/${migratedId}`);
@@ -393,15 +409,15 @@ const ClientProfile: React.FC = () => {
     }
   };
 
-  const handleSavePlan = async (e: React.FormEvent, publishImmediately: boolean = true) => {
+  const handleSavePlan = async (e: React.FormEvent, publishImmediately: boolean = false) => {
     e?.preventDefault?.();
     if (!id || planSections.length === 0 || isSavingPlan) return;
 
     setIsSavingPlan(true);
     try {
       const now = new Date().toISOString();
-      const existingPlan = editingPlanId ? workoutPlans.find(p => p.id === editingPlanId) : null;
-      const isApproved = publishImmediately || (existingPlan ? (existingPlan.approved ?? true) : true);
+      // Workouts MUST NOT be shown to client without explicit trainer approval
+      const isApproved = publishImmediately === true;
       
       const planData = {
         id: editingPlanId || undefined,
@@ -418,7 +434,7 @@ const ClientProfile: React.FC = () => {
       setShowPlanForm(false);
       setEditingPlanId(null);
       setPlanSections([{ title: '', content: '' }]);
-      alert(isApproved ? "Workout blueprint saved & published to client profile!" : "Workout plan saved as draft.");
+      alert(isApproved ? "Workout plan approved & published to client!" : "Workout plan saved as Draft. It will NOT be shown to the client until you approve it.");
     } catch (error) {
       console.error("Error saving workout plan:", error);
       alert("Failed to save workout plan.");
@@ -437,15 +453,14 @@ const ClientProfile: React.FC = () => {
     }
   };
 
-  const handleSaveDietPlan = async (e: React.FormEvent, publishImmediately: boolean = true) => {
+  const handleSaveDietPlan = async (e: React.FormEvent, publishImmediately: boolean = false) => {
     e?.preventDefault?.();
     if (!id || dietSections.length === 0 || isSavingDiet) return;
 
     setIsSavingDiet(true);
     try {
       const now = new Date().toISOString();
-      const existingPlan = editingDietId ? dietPlans.find(p => p.id === editingDietId) : null;
-      const isApproved = publishImmediately || (existingPlan ? (existingPlan.approved ?? true) : true);
+      const isApproved = publishImmediately === true;
       
       const planData = {
         id: editingDietId || undefined,
@@ -462,7 +477,7 @@ const ClientProfile: React.FC = () => {
       setShowDietForm(false);
       setEditingDietId(null);
       setDietSections([{ title: '', content: '' }]);
-      alert(isApproved ? "Diet schedule saved & published to client profile!" : "Diet plan saved as draft.");
+      alert(isApproved ? "Diet schedule approved & published to client!" : "Diet plan saved as Draft. It will NOT be visible to client until approved.");
     } catch (error) {
       console.error("Error saving diet plan:", error);
       alert("Failed to save diet plan.");
@@ -1652,6 +1667,7 @@ const ClientProfile: React.FC = () => {
             isTrainer={userData?.role === 'TRAINER'} 
             healthDoc={healthAssessmentDoc || (client as any)?.healthAssessment}
             fitnessDoc={fitnessAssessmentDoc || (client as any)?.fitnessAssessment}
+            clientDoc={client}
           />
         </div>
       )}

@@ -251,15 +251,42 @@ export async function reconcileClientAccounts(clients: any[], trainerId: string)
       const plainPassword = client.password || client.assignedPassword;
       if (plainPassword) {
         console.log(`Securing legacy plaintext password for client ${cId}`);
+        // First try server endpoint which has Admin rights to update both Firestore and local cache
+        let securedViaServer = false;
         try {
-          const passwordHash = await hashPassword(plainPassword);
-          await updateDoc(doc(db, 'users', cId), {
-            passwordHash,
-            password: deleteField(),
-            assignedPassword: deleteField()
+          const resp = await fetch('/api/trainer/secure-client-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clientId: cId, plainPassword })
           });
-        } catch (passErr) {
-          console.error(`Failed to secure plaintext password for client ${cId}:`, passErr);
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.success) {
+              securedViaServer = true;
+              // Clean in-memory reference
+              delete client.password;
+              delete client.assignedPassword;
+              client.passwordHash = await hashPassword(plainPassword);
+            }
+          }
+        } catch (serverErr) {
+          console.warn(`Server-side password securing endpoint unreachable, falling back:`, serverErr);
+        }
+
+        if (!securedViaServer) {
+          try {
+            const passwordHash = await hashPassword(plainPassword);
+            await updateDoc(doc(db, 'users', cId), {
+              passwordHash,
+              password: deleteField(),
+              assignedPassword: deleteField()
+            });
+            delete client.password;
+            delete client.assignedPassword;
+            client.passwordHash = passwordHash;
+          } catch (passErr) {
+            console.warn(`Direct client Firestore password securing for ${cId} deferred:`, passErr);
+          }
         }
       }
 

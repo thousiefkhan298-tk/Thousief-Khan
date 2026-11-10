@@ -52,13 +52,15 @@ function compressAndGetBase64(file: File, maxWidth = 400, maxHeight = 400, quali
 export const firebaseService = {
   // Users
   async getUser(uid: string) {
+    if (!uid) return null;
     const path = `users/${uid}`;
     try {
       const docRef = doc(db, 'users', uid);
       const docSnap = await getDoc(docRef);
       return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, path);
+      console.warn(`User document ${uid} not found or inaccessible in Firestore:`, error);
+      return null;
     }
   },
 
@@ -714,9 +716,36 @@ export const firebaseService = {
 
   async submitOnboarding(uid: string, data: any) {
     const path = `users/${uid}`;
+    const now = new Date().toISOString();
+
+    // 1. Send to server-side endpoint with Admin SDK guarantees if signed in
     try {
-      const now = new Date().toISOString();
-      // 1. Update user document with all completed sections and flags
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        const idToken = await currentUser.getIdToken();
+        await fetch('/api/client/submit-assessment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            clientDetails: data.clientDetails || {},
+            fitnessAssessment: data.fitnessAssessment || {},
+            medicalAssessment: data.medicalAssessment || {},
+            dietPreferences: data.dietPreferences || {},
+            termsConsent: data.termsConsent || {},
+            name: data.name || data.clientDetails?.fullName,
+            phoneNumber: data.phoneNumber || data.clientDetails?.phoneNumber
+          })
+        });
+      }
+    } catch (serverErr) {
+      console.warn('Server-side submit-assessment sync fallback:', serverErr);
+    }
+
+    // 2. Parallel client-side update for instant cache and Firestore synchronization
+    try {
       await updateDoc(doc(db, 'users', uid), {
         ...data,
         onboardingCompleted: true,
@@ -729,7 +758,7 @@ export const firebaseService = {
         updatedAt: now
       });
 
-      // 2. Archive submission in assessmentsHistory
+      // Archive submission in assessmentsHistory
       try {
         await addDoc(collection(db, 'assessmentsHistory'), {
           clientId: uid,

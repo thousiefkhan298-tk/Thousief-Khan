@@ -38,9 +38,9 @@ export const ClientMyPlanView: React.FC<ClientMyPlanViewProps> = ({
   const [expandedArchiveWorkout, setExpandedArchiveWorkout] = useState<string | null>(null);
   const [expandedArchiveDiet, setExpandedArchiveDiet] = useState<string | null>(null);
 
-  // Archived plans (previous versions)
-  const archivedWorkouts = workoutPlans.filter(p => p.id !== activeWorkoutPlan?.id || p.isArchived);
-  const archivedDiets = dietPlans.filter(p => p.id !== activeDietPlan?.id || p.isArchived);
+  // Archived plans (only previous versions that were officially approved by trainer)
+  const archivedWorkouts = workoutPlans.filter(p => (p as any).approved === true && p.isArchived && p.id !== activeWorkoutPlan?.id);
+  const archivedDiets = dietPlans.filter(p => (p as any).approved === true && p.isArchived && p.id !== activeDietPlan?.id);
 
   return (
     <div className="space-y-6 pb-12 font-sans">
@@ -264,10 +264,10 @@ export const ClientMyPlanView: React.FC<ClientMyPlanViewProps> = ({
             <div className="bg-[#141417] border border-neutral-800 rounded-2xl p-12 text-center space-y-3 shadow-lg">
               <Dumbbell className="w-12 h-12 text-neutral-600 mx-auto" />
               <h3 className="text-lg font-bold text-white uppercase font-display">
-                Your trainer has not assigned a workout yet.
+                Workout Plan Pending Coach Approval
               </h3>
               <p className="text-xs text-neutral-400 font-mono max-w-md mx-auto">
-                Once your coach finishes assessing your intake form, your customized exercises, sets, reps, and tempos will be published right here.
+                Your certified trainer has not approved and released a workout routine for your profile yet. Once your coach reviews your intake assessment and approves your custom routine, it will be published here.
               </p>
             </div>
           )}

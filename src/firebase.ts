@@ -11,21 +11,23 @@ import {
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json' with { type: 'json' };
 
-// Filter internal clock-skew warnings from @firebase/firestore so they don't trigger the debug error panel
+// Filter internal clock-skew and transient offline/long-polling notices from @firebase/firestore so they don't trigger the debug error panel
 if (typeof window !== 'undefined' && typeof console !== 'undefined' && console.error) {
   const originalConsoleError = console.error;
   console.error = function (...args: any[]) {
-    const isClockSkewError = args.some(arg => {
-      if (typeof arg === 'string') {
-        return arg.includes('Detected an update time that is in the future');
-      }
-      if (arg && typeof arg.message === 'string') {
-        return arg.message.includes('Detected an update time that is in the future');
-      }
-      return false;
+    const isBenignFirestoreNotice = args.some(arg => {
+      const msg = typeof arg === 'string' ? arg : (arg && typeof arg.message === 'string' ? arg.message : '');
+      if (!msg) return false;
+      return (
+        msg.includes('Detected an update time that is in the future') ||
+        msg.includes('Could not reach Cloud Firestore backend') ||
+        msg.includes("Backend didn't respond within") ||
+        msg.includes('The client will operate in offline mode') ||
+        msg.includes('Fetching auth token failed')
+      );
     });
 
-    if (isClockSkewError) {
+    if (isBenignFirestoreNotice) {
       console.debug(...args);
       return;
     }
@@ -39,12 +41,15 @@ const databaseId = (firebaseConfig as any).firestoreDatabaseId || '(default)';
 let firestoreInstance: Firestore;
 try {
   firestoreInstance = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
     localCache: persistentLocalCache({
       tabManager: persistentSingleTabManager({ forceOwnership: true })
     })
   }, databaseId);
 } catch (e) {
-  firestoreInstance = initializeFirestore(app, {}, databaseId);
+  firestoreInstance = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true
+  }, databaseId);
 }
 
 export const db = firestoreInstance;

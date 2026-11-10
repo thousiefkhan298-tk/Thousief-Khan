@@ -8,16 +8,18 @@
           var origError = console.error;
           console.error = function() {
             var args = Array.prototype.slice.call(arguments);
-            var isSkewError = args.some(function(arg) {
-              if (typeof arg === 'string') {
-                return arg.indexOf('Detected an update time that is in the future') !== -1;
-              }
-              if (arg && typeof arg.message === 'string') {
-                return arg.message.indexOf('Detected an update time that is in the future') !== -1;
-              }
-              return false;
+            var isBenignFirestoreNotice = args.some(function(arg) {
+              var msg = typeof arg === 'string' ? arg : (arg && typeof arg.message === 'string' ? arg.message : '');
+              if (!msg) return false;
+              return (
+                msg.indexOf('Detected an update time that is in the future') !== -1 ||
+                msg.indexOf('Could not reach Cloud Firestore backend') !== -1 ||
+                msg.indexOf("Backend didn't respond within") !== -1 ||
+                msg.indexOf('The client will operate in offline mode') !== -1 ||
+                msg.indexOf('Fetching auth token failed') !== -1
+              );
             });
-            if (isSkewError) {
+            if (isBenignFirestoreNotice) {
               if (console.debug) {
                 console.debug.apply(console, args);
               }
