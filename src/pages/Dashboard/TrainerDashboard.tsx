@@ -56,6 +56,8 @@ import { downloadClientReport, exportPaidClientsReport, exportAllInvoicesReport,
 import { isGmailAuthorized, authorizeGmail, sendGmailEmail, clearGmailAuthorization } from '../../services/gmailService.js';
 import { GoogleCalendarIntegration } from '../../components/GoogleCalendarIntegration.js';
 import TrainerLeadsView from './trainer/TrainerLeadsView';
+import TrainerHome from './trainer/TrainerHome';
+import { calculatePaymentLedger } from '../../services/paymentService';
 import { ClientAssessmentModal } from '../../components/ClientAssessmentModal';
 
 
@@ -85,15 +87,17 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
   // Core subscribed states
   const { clients, loading: clientsLoading } = useClients(userData?.uid, userData?.email);
   const { plans: workoutPlans } = useAllWorkoutPlans();
-  const { attendance: attendanceRecords } = useAllAttendance();
-  const { payments: paymentRecords } = useAllPayments();
+  const { attendance: attendanceRecords, loading: attendanceLoading } = useAllAttendance();
+  const { payments: paymentRecords, loading: paymentsLoading } = useAllPayments();
   const { plans: dietPlans } = useAllDietPlans();
   
   const [recentLogs, setRecentLogs] = useState<WorkoutLog[]>([]);
+  const [logsLoaded, setLogsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<{ id: string, clientId?: string, type: 'inactive' | 'session' | 'payment' | 'message', title: string, message: string, date: number }[]>([]);
   const [rescheduleRequests, setRescheduleRequests] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [allDrafts, setAllDrafts] = useState<any[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
@@ -182,6 +186,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
   useEffect(() => {
     const unsubscribeLogs = firebaseService.subscribeToWorkoutLogs((logs) => {
       setRecentLogs(logs);
+      setLogsLoaded(true);
     });
 
     const unsubscribeRequests = firebaseService.subscribeToRescheduleRequests((requests) => {
@@ -190,6 +195,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
 
     const unsubscribeSessions = firebaseService.subscribeToAllSessions((data) => {
       setSessions(data);
+      setSessionsLoaded(true);
     });
 
     const unsubscribeDrafts = firebaseService.subscribeToAllPendingDrafts((data) => {
@@ -923,6 +929,33 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
   }, []);
 
 
+  if (currentTab === 'dashboard') {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const clientIds = new Set(clients.map(client => client.id));
+    const loggedToday = new Set(attendanceRecords.filter(record => record.date === today).map(record => record.clientId));
+    const attendanceToRecord = new Set(sessions.filter(session =>
+      session.date === today && ['Confirmed', 'Completed'].includes(session.status) &&
+      clientIds.has(session.clientId) && !loggedToday.has(session.clientId)
+    ).map(session => session.clientId)).size;
+    const clientsWithFeesDue = new Set(paymentRecords.filter(record => {
+      if (!clientIds.has(record.clientId)) return false;
+      const balance = record.outstandingBalance ?? (record.feeINR != null || record.charges?.length
+        ? calculatePaymentLedger(record).outstandingBalance
+        : getBalanceDueForRecord(record));
+      return Number(balance) > 0;
+    }).map(record => record.clientId)).size;
+
+    return (
+      <TrainerHome
+        clients={clients}
+        clientsLoading={clientsLoading}
+        attendanceToRecord={clientsLoading || attendanceLoading || !sessionsLoaded ? null : attendanceToRecord}
+        clientsWithFeesDue={clientsLoading || paymentsLoading ? null : clientsWithFeesDue}
+        workoutCount={clientsLoading || !logsLoaded ? null : recentLogs.filter(log => clientIds.has(log.clientId)).length}
+      />
+    );
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -995,7 +1028,7 @@ const TrainerDashboard: React.FC<Props> = ({ userData }) => {
       </div>
 
       {/* 1. MAIN OVERVIEW TAB */}
-      {currentTab === 'dashboard' && (
+      {currentTab === 'analytics' && (
         <div className="space-y-8">
           {/* Main counts Board */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">

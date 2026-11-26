@@ -26,8 +26,8 @@ export default defineConfig({
         name: 'Speed Fit',
         short_name: 'Speed Fit',
         description: 'Build to Transform',
-        theme_color: '#000000',
-        background_color: '#ffffff',
+        theme_color: '#0D0D0F',
+        background_color: '#0D0D0F',
         display: 'standalone',
         icons: [
           {

@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/(login|signup|onboarding|dashboard|workout-logs|workout-templates|messages|schedule|billing|subscription|profile|settings)", "destination": "/index.html" },
+    { "source": "/client/:id", "destination": "/index.html" }
+  ]
+}

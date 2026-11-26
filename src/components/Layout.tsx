@@ -23,7 +23,6 @@ import {
   ChevronRight,
   Menu,
   X,
-  MoreHorizontal,
   Flame
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
@@ -41,7 +40,6 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isTrainerMoreOpen, setIsTrainerMoreOpen] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   
   useEffect(() => {
@@ -92,13 +90,14 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
   };
 
   const handleTabClick = (tab: string) => {
-    if (location.pathname !== '/dashboard') {
+    if (tab === 'journal') {
+      navigate('/workout-logs?view=journal');
+    } else if (location.pathname !== '/dashboard') {
       navigate(`/dashboard?tab=${tab}`);
     } else {
       setSearchParams({ tab });
     }
     setIsMobileMenuOpen(false);
-    setIsTrainerMoreOpen(false);
   };
 
   // Quick Action triggers
@@ -115,19 +114,21 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
   const trainerDailyTabs = [
     { name: 'Home', tab: 'dashboard', icon: Activity },
     { name: 'Clients', tab: 'clients', icon: Users },
-    { name: 'Assessments', tab: 'assessments', icon: ClipboardList },
-    { name: 'Sessions', tab: 'calendar', icon: Calendar },
-    { name: 'Plans', tab: 'workouts', icon: Dumbbell },
+    { name: 'Attendance', tab: 'attendance', icon: CheckSquare },
+    { name: 'Workouts', tab: 'journal', icon: Dumbbell },
     { name: 'Payments', tab: 'payments', icon: CreditCard },
+    { name: 'Settings', tab: 'settings', icon: Settings },
   ];
 
   const trainerMoreTabs = [
+    { name: 'Assessments', tab: 'assessments', icon: ClipboardList },
+    { name: 'Sessions', tab: 'calendar', icon: Calendar },
+    { name: 'Plans', tab: 'workouts', icon: Dumbbell },
     { name: 'Leads', tab: 'leads', icon: Flame },
-    { name: 'Attendance', tab: 'attendance', icon: CheckSquare },
     { name: 'Check-ins', tab: 'checkins', icon: ClipboardList },
     { name: 'Drafts', tab: 'drafts', icon: Zap },
     { name: 'Reports', tab: 'reports', icon: TrendingUp },
-    { name: 'Settings', tab: 'settings', icon: Settings },
+    { name: 'Analytics & alerts', tab: 'analytics', icon: Bell },
   ];
 
   // Client Navigation: Home, My Plan, Sessions, Progress, Profile
@@ -141,8 +142,9 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
 
   const isTabActive = (tabKey: string) => {
     if (isTrainer) {
-      if (tabKey === 'dashboard') return currentTab === 'dashboard' || !currentTab;
-      if (tabKey === 'clients') return currentTab === 'clients';
+      if (tabKey === 'dashboard') return location.pathname === '/dashboard' && currentTab === 'dashboard';
+      if (tabKey === 'clients') return currentTab === 'clients' || location.pathname.startsWith('/client/');
+      if (tabKey === 'journal') return location.pathname === '/workout-logs';
       if (tabKey === 'assessments') return currentTab === 'assessments';
       if (tabKey === 'calendar') return currentTab === 'calendar' || currentTab === 'sessions';
       if (tabKey === 'workouts') return currentTab === 'workouts' || currentTab === 'dietplans' || currentTab === 'plans';
@@ -163,8 +165,6 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
     return currentTab === tabKey;
   };
 
-  const isMoreActive = isTrainer && ['leads', 'attendance', 'checkins', 'drafts', 'reports', 'settings'].includes(currentTab);
-
   const getPageHeading = () => {
     if (location.pathname.startsWith('/client/')) return 'Client details';
     if (location.pathname === '/profile') return 'Profile';
@@ -179,6 +179,7 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
     if (isTrainer) {
       switch (currentTab) {
         case 'dashboard': return 'Home';
+        case 'analytics': return 'Analytics & alerts';
         case 'clients': return 'Clients';
         case 'assessments': return 'Client Intake Assessments';
         case 'calendar':
@@ -298,7 +299,7 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
               <div className="pt-2 border-t border-[#26262B]">
                 {isSidebarOpen && (
                   <p className="px-3 mb-2 text-[11px] font-semibold tracking-wider text-slate-400 uppercase font-mono">
-                    More
+                    More management pages
                   </p>
                 )}
                 <div className="space-y-1">
@@ -548,7 +549,7 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
         )}
 
         {/* Main Content Area */}
-        <main className="flex-1 p-4 sm:p-6 md:p-8 pb-28 md:pb-8 overflow-y-auto custom-scrollbar">
+        <main className="flex-1 p-4 sm:p-6 md:p-8 pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-8 overflow-y-auto custom-scrollbar">
           {children}
         </main>
       </div>
@@ -557,7 +558,7 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
       {isTrainer && (
         <nav 
           aria-label="Trainer mobile navigation" 
-          className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#111114]/95 border-t border-[#26262B] px-1 py-1.5 flex items-center justify-around backdrop-blur-lg shadow-md safe-area-inset-bottom"
+          className="md:hidden fixed bottom-0 left-0 right-0 z-40 grid grid-cols-6 gap-0.5 border-t border-[#383840] bg-[#17171e]/95 px-1 pt-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))] backdrop-blur-lg"
         >
           {trainerDailyTabs.map((item) => {
             const Icon = item.icon;
@@ -567,78 +568,19 @@ const Layout: React.FC<LayoutProps> = ({ children, userData }) => {
                 key={item.tab}
                 onClick={() => handleTabClick(item.tab)}
                 aria-label={item.name}
-                className={`flex flex-col items-center justify-center min-h-[44px] min-w-[44px] py-1 px-2 rounded-xl transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DC2626] focus:outline-none ${
-                  active ? 'text-[#DC2626]' : 'text-slate-400 hover:text-white'
+                aria-current={active ? 'page' : undefined}
+                className={`flex min-w-0 flex-col items-center justify-center min-h-[44px] py-1 rounded-lg transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DC2626] focus:outline-none ${
+                  active ? 'bg-[#451d24] text-[#ff7d86]' : 'text-[#b5b5c0] hover:text-white'
                 }`}
               >
                 <Icon size={19} className={active ? 'stroke-[2.5]' : 'stroke-2'} />
-                <span className={`text-[10px] tracking-normal mt-0.5 ${active ? 'font-bold text-[#DC2626]' : 'font-normal text-slate-400'}`}>
+                <span className="mt-0.5 text-[10px] font-medium">
                   {item.name}
                 </span>
               </button>
             );
           })}
-          {/* More Button */}
-          <button
-            onClick={() => setIsTrainerMoreOpen(!isTrainerMoreOpen)}
-            aria-label="More options"
-            className={`flex flex-col items-center justify-center min-h-[44px] min-w-[44px] py-1 px-2 rounded-xl transition-all cursor-pointer relative focus-visible:ring-2 focus-visible:ring-[#DC2626] focus:outline-none ${
-              isMoreActive ? 'text-[#DC2626]' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <MoreHorizontal size={19} className={isMoreActive ? 'stroke-[2.5]' : 'stroke-2'} />
-            <span className={`text-[10px] tracking-normal mt-0.5 ${isMoreActive ? 'font-bold text-[#DC2626]' : 'font-normal text-slate-400'}`}>
-              More
-            </span>
-            {isMoreActive && (
-              <span className="absolute top-1 right-2 w-1.5 h-1.5 bg-[#DC2626] rounded-full"></span>
-            )}
-          </button>
         </nav>
-      )}
-
-      {/* TRAINER MORE BOTTOM SHEET (Mobile) */}
-      {isTrainer && isTrainerMoreOpen && (
-        <div 
-          className="md:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col justify-end"
-          onClick={() => setIsTrainerMoreOpen(false)}
-        >
-          <div 
-            className="bg-[#141417] border-t border-[#26262B] rounded-t-3xl p-5 pb-8 space-y-3 animate-in slide-in-from-bottom duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-[#26262B]">
-              <h3 className="text-sm font-bold text-white">More management pages</h3>
-              <button 
-                onClick={() => setIsTrainerMoreOpen(false)} 
-                aria-label="Close more options menu"
-                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-white"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2.5 pt-1">
-              {trainerMoreTabs.map((item) => {
-                const Icon = item.icon;
-                const active = isTabActive(item.tab);
-                return (
-                  <button
-                    key={item.tab}
-                    onClick={() => handleTabClick(item.tab)}
-                    className={`flex items-center gap-3 p-3.5 min-h-[48px] rounded-xl text-left border transition-all ${
-                      active
-                        ? 'bg-[#DC2626] border-[#DC2626] text-white font-bold'
-                        : 'bg-[#18181C] border-[#26262B] text-slate-200 hover:bg-[#222228]'
-                    }`}
-                  >
-                    <Icon size={18} className={active ? 'text-white' : 'text-[#DC2626]'} />
-                    <span className="text-xs font-medium">{item.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
       )}
 
       {/* MOBILE BOTTOM NAVIGATION - CLIENT */}

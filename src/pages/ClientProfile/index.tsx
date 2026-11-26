@@ -17,6 +17,9 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { format, subDays, isSameDay, addDays, differenceInDays } from 'date-fns';
 import { motion } from 'motion/react';
 import { exportClientToPDF, exportPaymentReceiptToPDF } from '../../utils/pdfExporter.js';
+import { formatWhatsAppPhone } from '../../utils/healthAssessmentFlags';
+
+type ProfileTab = 'overview' | 'logs' | 'plans' | 'assessments' | 'consent' | 'payments' | 'ai-transformation';
 
 const ClientProfile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -37,10 +40,10 @@ const ClientProfile: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const [searchParams] = useSearchParams();
-  const initialTab = (searchParams.get('tab') as 'overview' | 'logs' | 'plans' | 'assessments' | 'payments') || 'overview';
+  const initialTab = (searchParams.get('tab') as ProfileTab) || 'overview';
   
   // Workout Plan Form State
-  const [activeTab, setActiveTab] = useState<'overview' | 'logs' | 'plans' | 'assessments' | 'payments'>(initialTab);
+  const [activeTab, setActiveTab] = useState<ProfileTab>(initialTab);
   const [pendingDrafts, setPendingDrafts] = useState<any[]>([]);
   const [showPlanForm, setShowPlanForm] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
@@ -853,6 +856,25 @@ const ClientProfile: React.FC = () => {
 
   if (!client) return <Layout userData={userData}><div className="p-10 font-mono text-red-500 uppercase tracking-widest">Error: Client not found in database.</div></Layout>;
 
+  const isTrainer = userData?.role === 'TRAINER';
+  const phone = formatWhatsAppPhone(clientDetails?.phoneNumber || client.phoneNumber || '');
+  const clientName = clientDetails?.fullName || client.name || 'there';
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const latestWorkoutDate = recentLogs.reduce((latest, log) =>
+    log.entries?.length && log.date > latest ? log.date : latest, '');
+  const workoutSummary = recentLogs.filter(log => latestWorkoutDate && log.date === latestWorkoutDate)
+    .flatMap(log => log.entries || [])
+    .map(entry => `${entry.exercise} — ${entry.sets} sets × ${entry.reps} reps${entry.weight ? ` @ ${entry.weight} kg` : ''}`)
+    .join('\n');
+  const consent = client.termsConsent;
+  const termsAccepted = consent?.accepted ?? client.termsAccepted;
+  const consentDetails = [
+    ['Recorded name', consent?.typedFullName || client.termsAcceptedName],
+    ['Accepted on', consent?.acceptedAt || client.termsAcceptedAt],
+    ['Terms version', consent?.termsVersion || client.termsVersion],
+  ];
+  const whatsappUrl = (message: string) => `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+
   return (
     <Layout userData={userData}>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-10">
@@ -1083,23 +1105,50 @@ const ClientProfile: React.FC = () => {
       </div>
       </div>
 
+      {isTrainer && (
+        <section aria-label="Client shortcuts" className="mb-5 flex flex-wrap gap-2">
+          <Link to={`/workout-logs?view=journal&client=${encodeURIComponent(client.id)}`}
+            className="inline-flex min-h-11 items-center rounded-xl border border-[#41414b] px-3 text-sm font-semibold text-white">
+            Open workout journal
+          </Link>
+          {/^[1-9]\d{9,14}$/.test(phone) ? (
+            <>
+              <a href={whatsappUrl(`Hi ${clientName}, please confirm whether you attended your SPEED FIT training session on ${today}. Reply PRESENT or ABSENT. Thank you.`)}
+                target="_blank" rel="noopener noreferrer"
+                className="inline-flex min-h-11 items-center rounded-xl bg-[#be2433] px-3 text-sm font-semibold text-white">
+                Ask about attendance on WhatsApp
+              </a>
+              {workoutSummary && (
+                <a href={whatsappUrl(`Hi ${clientName}, here is your completed SPEED FIT workout for ${latestWorkoutDate}:\n${workoutSummary}`)}
+                  target="_blank" rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center rounded-xl border border-[#41414b] px-3 text-sm font-semibold text-white">
+                  Share latest workout on WhatsApp
+                </a>
+              )}
+            </>
+          ) : <p className="self-center text-sm text-[#b5b5c0]">Add a valid phone number to use WhatsApp shortcuts.</p>}
+        </section>
+      )}
+
       {/* Tabs */}
-      <div className="flex border-b border-neutral-700/50 mb-10 overflow-x-auto custom-scrollbar">
-        {[
+      <div className="mb-6 flex gap-2 overflow-x-auto pb-2 custom-scrollbar" aria-label="Client profile sections">
+        {([
           { id: 'overview', label: 'Overview', icon: <UserIcon className="w-4 h-4 mr-2" /> },
           { id: 'plans', label: 'Workout & Diet Plans', icon: <FileText className="w-4 h-4 mr-2" /> },
           { id: 'logs', label: 'Logs & Sessions', icon: <Activity className="w-4 h-4 mr-2" /> },
           { id: 'assessments', label: 'Assessments', icon: <Target className="w-4 h-4 mr-2" /> },
-          { id: 'payments', label: 'Payment', icon: <CreditCard className="w-4 h-4 mr-2" /> },
+          { id: 'consent', label: 'Consent', icon: <Shield className="w-4 h-4 mr-2" /> },
+          { id: 'payments', label: 'Payments', icon: <CreditCard className="w-4 h-4 mr-2" /> },
           { id: 'ai-transformation', label: 'AI Transformation', icon: <Zap className="w-4 h-4 mr-2" /> },
-        ].map((tab) => (
+        ] satisfies { id: ProfileTab; label: string; icon: React.ReactNode }[]).map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center px-8 py-4 font-mono text-[10px] uppercase tracking-widest transition-all ${
+            onClick={() => setActiveTab(tab.id)}
+            aria-pressed={activeTab === tab.id}
+            className={`flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-xl border px-3 text-sm transition-colors ${
               activeTab === tab.id
-                ? 'text-brand-red border-b-2 border-brand-red bg-neutral-800/30'
-                : 'text-neutral-400 hover:text-white hover:bg-neutral-800/20'
+                ? 'border-[#92343f] bg-[#542027] text-white'
+                : 'border-[#41414b] bg-[#28282f] text-[#d9d9e0] hover:text-white'
             }`}
           >
             {tab.icon}
@@ -1107,6 +1156,23 @@ const ClientProfile: React.FC = () => {
           </button>
         ))}
       </div>
+
+      {activeTab === 'consent' && (
+        <section className="rounded-2xl border border-[#32323a] bg-[#1b1b22] p-5">
+          <h3 className="text-lg font-semibold text-white">Terms and consent</h3>
+          <p className="mt-2 text-sm text-[#d9d9e0]">{termsAccepted ? 'Acceptance recorded' : 'No acceptance recorded'}</p>
+          {termsAccepted && (
+            <dl className="mt-4 grid gap-4 sm:grid-cols-3">
+              {consentDetails.map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-sm text-[#b5b5c0]">{label}</dt>
+                  <dd className="mt-1 break-words text-sm font-medium text-white">{value || 'Unavailable'}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </section>
+      )}
 
       {activeTab === 'overview' && (
         <div className="space-y-10 animate-fade-in">

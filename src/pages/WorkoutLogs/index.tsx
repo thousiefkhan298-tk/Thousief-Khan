@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { firebaseService } from '../../services/firebaseService.js';
 import { auth } from '../../firebase.js';
 import Layout from '../../components/Layout.js';
+import { Link, useSearchParams } from 'react-router-dom';
+import { format } from 'date-fns';
 import { WorkoutLog, User, FavoriteExercise, ScheduledWorkout } from '../../types.js';
 import { Plus, Trash2, ChevronDown, Star, Search, ClipboardList, Zap, History, Calendar, Play, Video } from 'lucide-react';
 import { COMMON_EXERCISES } from '../../constants';
@@ -14,6 +16,9 @@ interface WorkoutLogsProps {
 }
 
 const WorkoutLogs: React.FC<WorkoutLogsProps> = ({ user }) => {
+  const [searchParams] = useSearchParams();
+  const journalView = user.role === 'TRAINER' && searchParams.get('view') === 'journal';
+  const requestedClientId = searchParams.get('client');
   const [userData, setUserData] = useState<any>(user);
   const [clients, setClients] = useState<User[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>(user.role === 'CLIENT' ? user.uid : '');
@@ -23,8 +28,9 @@ const WorkoutLogs: React.FC<WorkoutLogsProps> = ({ user }) => {
   const [allLoggedExercises, setAllLoggedExercises] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [isSavingWorkout, setIsSavingWorkout] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
-  const [activeTab, setActiveTab] = useState<'LOGS' | 'SCHEDULED'>(user.role === 'TRAINER' ? 'SCHEDULED' : 'LOGS');
+  const [activeTab, setActiveTab] = useState<'LOGS' | 'SCHEDULED'>(user.role === 'TRAINER' && !journalView ? 'SCHEDULED' : 'LOGS');
   const [dropdownIndex, setDropdownIndex] = useState<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
@@ -53,10 +59,11 @@ const WorkoutLogs: React.FC<WorkoutLogsProps> = ({ user }) => {
       try {
         if (userData.role === 'TRAINER') {
           const clientsData = await firebaseService.getUsers();
-          setClients(clientsData.filter(u => u.role === 'CLIENT'));
-          if (clientsData.filter(u => u.role === 'CLIENT').length > 0 && !selectedClientId) {
-            setSelectedClientId(clientsData.filter(u => u.role === 'CLIENT')[0].id);
-          }
+          const availableClients = clientsData.filter(u => u.role === 'CLIENT' && !u.isMigrated);
+          setClients(availableClients);
+          setSelectedClientId(currentId => currentId ||
+            availableClients.find(client => client.id === requestedClientId)?.id ||
+            availableClients[0]?.id || '');
 
           const favsData = await firebaseService.getFavorites(userData.uid);
           setFavorites(favsData);
@@ -208,14 +215,20 @@ const WorkoutLogs: React.FC<WorkoutLogsProps> = ({ user }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedClientId || !date) return;
+    if (isSavingWorkout) return;
+    const validEntries = entries.filter(entry => entry.exercise.trim() !== '');
+    if (!selectedClientId || !date || validEntries.length === 0) {
+      alert('Choose a client and date, then enter at least one exercise.');
+      return;
+    }
 
+    setIsSavingWorkout(true);
     try {
       if (isScheduling) {
         const newScheduled: any = {
           clientId: selectedClientId,
           date,
-          entries: entries.filter(e => e.exercise.trim() !== ''),
+          entries: validEntries,
           notes,
           status: 'SCHEDULED'
         };
@@ -225,7 +238,7 @@ const WorkoutLogs: React.FC<WorkoutLogsProps> = ({ user }) => {
         const newLog: any = {
           clientId: selectedClientId,
           date,
-          entries: entries.filter(e => e.exercise.trim() !== ''),
+          entries: validEntries,
           notes
         };
         if (editingId) newLog.id = editingId;
@@ -242,6 +255,8 @@ const WorkoutLogs: React.FC<WorkoutLogsProps> = ({ user }) => {
     } catch (error) {
       console.error("Error saving workout:", error);
       alert("Failed to save workout.");
+    } finally {
+      setIsSavingWorkout(false);
     }
   };
 
@@ -279,8 +294,8 @@ const WorkoutLogs: React.FC<WorkoutLogsProps> = ({ user }) => {
             <ClipboardList className="w-4 h-4 text-brand-red" />
             <p className="text-[10px] font-mono uppercase tracking-[0.4em] text-brand-red">Workout History</p>
           </div>
-          <h2 className="text-6xl font-display italic uppercase leading-none">
-            Workout <span className="text-brand-red">Logs</span>
+          <h2 className="text-3xl sm:text-5xl font-display italic uppercase leading-none">
+            Workout <span className="text-brand-red">{journalView ? 'Journal' : 'Logs'}</span>
           </h2>
           <p className="text-white font-bold font-mono text-[10px] uppercase tracking-widest mt-4">
             Track and manage training performance.
@@ -289,11 +304,12 @@ const WorkoutLogs: React.FC<WorkoutLogsProps> = ({ user }) => {
         <div className="flex flex-wrap gap-4">
           <button 
             onClick={() => {
-              setShowForm(!showForm);
+              setShowForm(!showForm || isScheduling);
+              setActiveTab('LOGS');
               setIsScheduling(false);
               setEditingId(null);
               setEntries([{ exercise: '', sets: '', reps: '', weight: '' }]);
-              setDate('');
+              setDate(format(new Date(), 'yyyy-MM-dd'));
               setNotes('');
             }}
             className="btn-secondary group"
@@ -304,7 +320,8 @@ const WorkoutLogs: React.FC<WorkoutLogsProps> = ({ user }) => {
           {userData?.role === 'TRAINER' && (
             <button 
               onClick={() => {
-                setShowForm(!showForm);
+                setShowForm(!showForm || !isScheduling);
+                  setActiveTab('SCHEDULED');
                 setIsScheduling(true);
                 setEditingId(null);
                 setEntries([{ exercise: '', sets: '', reps: '', weight: '' }]);
@@ -319,6 +336,13 @@ const WorkoutLogs: React.FC<WorkoutLogsProps> = ({ user }) => {
           )}
         </div>
       </div>
+
+      {journalView && (
+        <div className="mb-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+          <Link className="text-[#ff7d86] underline underline-offset-4" to="/dashboard?tab=workouts">Workout plans</Link>
+          <Link className="text-[#ff7d86] underline underline-offset-4" to="/dashboard?tab=dietplans">Diet plans</Link>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex space-x-8 mb-10 border-b border-neutral-700">
@@ -590,9 +614,10 @@ const WorkoutLogs: React.FC<WorkoutLogsProps> = ({ user }) => {
                 </button>
                 <button 
                   type="submit" 
-                  className="bg-white text-black px-10 py-4 rounded-2xl font-mono text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-200 transition-all"
+                  disabled={isSavingWorkout}
+                  className="bg-white text-black px-10 py-4 rounded-2xl font-mono text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-200 transition-all disabled:opacity-50"
                 >
-                  {editingId ? 'Update Workout' : (isScheduling ? 'Schedule Workout' : 'Save Log')}
+                  {isSavingWorkout ? 'Saving…' : editingId ? 'Update Workout' : isScheduling ? 'Schedule Workout' : 'Save Log'}
                 </button>
             </div>
           </form>

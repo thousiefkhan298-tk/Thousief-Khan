@@ -19,9 +19,11 @@ test('Trainer navigation groups daily work and more management appropriately', a
   assert.ok(layoutContent.includes("name: 'Reports', tab: 'reports'"), 'Reports tab must be preserved');
   assert.ok(layoutContent.includes("name: 'Settings', tab: 'settings'"), 'Settings tab must be preserved');
 
-  // Verify mobile bottom navigation has daily tabs plus More trigger
+  // The six daily destinations appear on mobile. Additional pages stay in the menu.
+  assert.ok(layoutContent.includes("name: 'Workouts', tab: 'journal'"), 'Workouts opens the journal');
+  assert.ok(layoutContent.includes("navigate('/workout-logs?view=journal')"), 'Journal deep link is wired');
   assert.ok(layoutContent.includes('aria-label="Trainer mobile navigation"'), 'Trainer mobile bottom navigation must be present');
-  assert.ok(layoutContent.includes('More management pages'), 'More modal/sheet must be accessible on mobile');
+  assert.ok(layoutContent.includes('More management pages'), 'Additional pages must remain in the mobile menu');
 });
 
 test('Client navigation presents Home, My Plan, Sessions, Progress, Profile with mobile bottom navigation', async () => {
